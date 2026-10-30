@@ -3,8 +3,9 @@ uvicorn[standard]
 sqlalchemy
 pandas
 openpyxl
+xlrd
 PyGithub
 GitPython
 jinja2
 python-multipart
-httpx
+httpxpython-dotenv
