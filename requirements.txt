@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+pandas
+openpyxl
+PyGithub
+GitPython
+jinja2
+python-multipart
+httpx
