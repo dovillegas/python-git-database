@@ -37,4 +37,15 @@ def get_db():
 
 def init_db():
     from app import models  # noqa: F401  (registra las tablas en Base)
+    from app.migrations import migrar_equipos
+
+    migrar_equipos(engine)
     Base.metadata.create_all(bind=engine)
+
+    from app.services.evaluacion_seed import sembrar_evaluacion
+
+    db = SessionLocal()
+    try:
+        sembrar_evaluacion(db)
+    finally:
+        db.close()

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}Editar integrante · BD1 Seguimiento{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl space-y-6">
+  <nav class="text-sm text-slate-500" aria-label="Migas de pan">
+    <a href="/" class="text-blue-700 hover:underline">Inicio</a><span class="mx-2">›</span>
+    <a href="/equipos/{{ equipo.id }}" class="text-blue-700 hover:underline">{{ equipo.nombre_proyecto or equipo.nombre }}</a><span class="mx-2">›</span>
+    <span class="font-medium text-slate-800">Editar integrante</span>
+  </nav>
+  <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+    <p class="text-sm font-semibold uppercase tracking-wide text-blue-700">Datos del integrante</p>
+    <h1 class="mt-2 text-3xl font-bold tracking-tight text-slate-950">Editar {{ valores.get('apellido_nombre', estudiante.apellido_nombre) }}</h1>
+    {% if proceso_activo %}<div class="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status">Hay un lote activo. La edición está deshabilitada hasta que termine.</div>{% endif %}
+    {% if error %}<div class="mt-5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900" role="alert">{{ error }}{% if conflicto_estudiante_id %}<p class="mt-2"><a href="/equipos/{{ equipo.id }}" class="font-semibold underline">Volver al equipo</a></p>{% endif %}</div>{% endif %}
+    <form method="post" action="/estudiantes/{{ estudiante.id }}/editar" class="mt-5 space-y-4">
+      <label class="block text-sm font-medium text-slate-700">Apellido y nombre
+        <input name="apellido_nombre" value="{{ valores.get('apellido_nombre', estudiante.apellido_nombre) }}" required maxlength="255" class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 shadow-sm" {% if proceso_activo %}disabled{% endif %}>
+      </label>
+      <label class="block text-sm font-medium text-slate-700">DNI
+        <input name="dni" value="{{ valores.get('dni', estudiante.dni) }}" required maxlength="32" class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 shadow-sm" {% if proceso_activo %}disabled{% endif %}>
+      </label>
+      <label class="block text-sm font-medium text-slate-700">Email
+        <input type="email" name="email" value="{{ valores.get('email', estudiante.email or '') }}" maxlength="320" class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 shadow-sm" {% if proceso_activo %}disabled{% endif %}>
+      </label>
+      <label class="block text-sm font-medium text-slate-700">Usuario GitHub
+        <input name="usuario_github" value="{{ valores.get('usuario_github', estudiante.usuario_github or '') }}" maxlength="100" placeholder="usuario" class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 shadow-sm" {% if proceso_activo %}disabled{% endif %}>
+      </label>
+      <div class="flex flex-wrap gap-3 border-t border-slate-100 pt-4">
+        <button type="submit" {% if proceso_activo %}disabled{% endif %} class="rounded-lg px-4 py-2.5 text-sm font-semibold text-white {% if proceso_activo %}cursor-not-allowed bg-slate-400{% else %}bg-blue-700 hover:bg-blue-800{% endif %}">Guardar cambios</button>
+        <a href="/equipos/{{ equipo.id }}" class="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancelar</a>
+      </div>
+    </form>
+  </section>
+</div>
+{% endblock %}

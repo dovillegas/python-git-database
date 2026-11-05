@@ -1,0 +1,73 @@
+{% macro fila_autor(autor, equipo_id, pestana, equipo_calculado, filtros) %}
+<tr id="autor-{{ autor.id }}" class="hover:bg-slate-50">
+  <td class="whitespace-nowrap px-4 py-3.5">
+    <a class="font-semibold text-blue-700 hover:text-blue-900" href="/equipos/{{ autor.equipo_id }}">{{ autor.equipo.nombre_proyecto or autor.equipo.nombre }}</a>
+    <span class="mt-0.5 block text-xs text-slate-500">{{ autor.equipo.comision.cohorte.anio }} · Comisión {{ autor.equipo.comision.numero }}</span>
+  </td>
+  <td class="px-4 py-3.5 font-medium text-slate-800">{{ autor.nombre_git or '—' }}</td>
+  <td class="break-all px-4 py-3.5 text-slate-600">{{ autor.email }}</td>
+  <td class="whitespace-nowrap px-4 py-3.5 text-slate-700">{% if equipo_calculado %}{{ autor.commits }}{% else %}<span class="text-slate-400">sin calcular</span>{% endif %}</td>
+  <td class="min-w-72 px-4 py-3.5">
+    {% if pestana == 'pendientes' %}
+      <form method="post" action="/autores/{{ autor.id }}/asignar" hx-post="/autores/{{ autor.id }}/asignar" hx-target="closest tr" hx-swap="outerHTML" class="flex flex-wrap items-center gap-2">
+        <input type="hidden" name="estado_actual" value="{{ pestana }}">
+        <input type="hidden" name="cohorte_id" value="{{ filtros.get('cohorte_id') or '' }}">
+        <input type="hidden" name="comision_id" value="{{ filtros.get('comision_id') or '' }}">
+        <input type="hidden" name="equipo_id" value="{{ filtros.get('equipo_id') or equipo_id or '' }}">
+        <label class="sr-only" for="estudiante-{{ autor.id }}">Estudiante para {{ autor.nombre_git }}</label>
+        <select id="estudiante-{{ autor.id }}" name="estudiante_id" required class="min-w-48 rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+          <option value="">Asignar a estudiante…</option>
+          {% for estudiante in autor.equipo.estudiantes|sort(attribute='apellido_nombre') %}
+            <option value="{{ estudiante.id }}">{{ estudiante.apellido_nombre }}{% if estudiante.usuario_github %} · @{{ estudiante.usuario_github }}{% endif %}</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="rounded-lg bg-blue-700 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-800">Asignar</button>
+      </form>
+      <form method="post" action="/autores/{{ autor.id }}/ignorar" hx-post="/autores/{{ autor.id }}/ignorar" hx-target="closest tr" hx-swap="outerHTML" class="mt-2">
+        <input type="hidden" name="estado_actual" value="{{ pestana }}">
+        <input type="hidden" name="cohorte_id" value="{{ filtros.get('cohorte_id') or '' }}">
+        <input type="hidden" name="comision_id" value="{{ filtros.get('comision_id') or '' }}">
+        <input type="hidden" name="equipo_id" value="{{ filtros.get('equipo_id') or equipo_id or '' }}">
+        <button type="submit" class="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100">Ignorar</button>
+      </form>
+    {% else %}
+      <form method="post" action="/autores/{{ autor.id }}/desasignar" hx-post="/autores/{{ autor.id }}/desasignar" hx-target="closest tr" hx-swap="outerHTML">
+        <input type="hidden" name="estado_actual" value="{{ pestana }}">
+        <input type="hidden" name="cohorte_id" value="{{ filtros.get('cohorte_id') or '' }}">
+        <input type="hidden" name="comision_id" value="{{ filtros.get('comision_id') or '' }}">
+        <input type="hidden" name="equipo_id" value="{{ filtros.get('equipo_id') or equipo_id or '' }}">
+        <button type="submit" class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100">{% if pestana == 'ignorados' %}Reactivar{% else %}Desasignar{% endif %}</button>
+      </form>
+    {% endif %}
+  </td>
+</tr>
+{% endmacro %}
+
+{% macro tabla_autores(listado, equipo_id=none, pestana='pendientes', equipos_calculados=none, filtros=none) %}
+{% set filtros = filtros or {} %}
+{% set equipos_calculados = equipos_calculados or [] %}
+<div id="autores-aviso" class="mb-4 rounded-xl border px-4 py-3 text-sm {% if aviso_tipo|default('') == 'warning' %}border-amber-200 bg-amber-50 text-amber-900{% else %}border-emerald-200 bg-emerald-50 text-emerald-900{% endif %}" role="status" aria-live="polite" {% if not aviso %}hidden{% endif %}>{% if aviso %}{{ aviso }}{% endif %}</div>
+<div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+  <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4"><h2 class="font-semibold text-slate-950">{% if pestana == 'pendientes' %}Autores pendientes{% elif pestana == 'asignados' %}Autores asignados{% else %}Autores ignorados{% endif %}</h2><span class="text-sm text-slate-500">{{ listado|length }} resultado{% if listado|length != 1 %}s{% endif %}</span></div>
+  <div class="overflow-x-auto"><table class="min-w-full divide-y divide-slate-200 text-left text-sm">
+    <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th class="whitespace-nowrap px-4 py-3">Equipo</th><th class="px-4 py-3">Nombre(s) Git</th><th class="px-4 py-3">Email</th><th class="px-4 py-3">Commits</th><th class="px-4 py-3">Acción</th></tr></thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for autor in listado %}{{ fila_autor(autor, equipo_id, pestana, autor.equipo_id in equipos_calculados, filtros) }}{% else %}
+        <tr><td colspan="5" class="px-6 py-12 text-center text-slate-500">No hay autores en esta pestaña para los filtros seleccionados.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{% endmacro %}
+
+{% if fila_respuesta is defined %}
+  {% if pestana == 'ignorados' and not fila_respuesta.ignorado %}
+    <tr id="autor-{{ fila_respuesta.id }}" hx-swap-oob="delete"></tr>
+  {% elif resumen %}
+    <tr class="bg-emerald-50"><td colspan="5" class="px-4 py-3 text-sm text-emerald-900">{{ resumen }}</td></tr>
+  {% else %}
+    {{ fila_autor(fila_respuesta, equipo_id, pestana, equipo_calculado, filtros) }}
+  {% endif %}
+  <div id="autores-aviso" hx-swap-oob="outerHTML" class="mb-4 rounded-xl border px-4 py-3 text-sm {% if aviso_tipo == 'warning' %}border-amber-200 bg-amber-50 text-amber-900{% else %}border-emerald-200 bg-emerald-50 text-emerald-900{% endif %}" role="status" aria-live="polite">{{ aviso }}</div>
+  <span id="nav-autores-count" hx-swap-oob="outerHTML" class="ml-1 rounded-full bg-white/15 px-2 py-0.5 text-xs font-bold">{{ pendientes_count }}</span>
+{% endif %}

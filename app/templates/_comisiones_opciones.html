@@ -1,0 +1,2 @@
+<option value="">Seleccioná una comisión</option>
+{% for item in comisiones %}<option value="{{ item.id }}" {% if comision_seleccionada == item.id %}selected{% endif %}>{{ item.numero }} · {{ item.cohorte.anio }}</option>{% else %}<option value="" disabled>No hay comisiones para esta cohorte</option>{% endfor %}

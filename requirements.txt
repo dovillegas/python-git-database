@@ -8,4 +8,6 @@ PyGithub
 GitPython
 jinja2
 python-multipart
-httpxpython-dotenv
+httpx
+python-dotenv
+requests

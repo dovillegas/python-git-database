@@ -1,0 +1,36 @@
+{% if error %}
+<div role="alert" class="rounded-xl border border-red-200 bg-red-50 p-5 text-red-900">
+  <h2 class="font-semibold">No se pudo importar el archivo</h2>
+  <p class="mt-1 text-sm">{{ error }}</p>
+</div>
+{% elif resumen %}
+<div class="rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950">
+  <h2 class="font-semibold">Importación finalizada</h2>
+  <p class="mt-1 text-sm">Filas procesadas: {{ resumen.filas_procesadas }} · Errores: {{ resumen.filas_con_error|length }}</p>
+  <dl class="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+    <div><dt class="text-emerald-800">Cohortes creadas</dt><dd class="font-semibold">{{ resumen.cohortes.creadas }}</dd></div>
+    <div><dt class="text-emerald-800">Cohortes actualizadas</dt><dd class="font-semibold">{{ resumen.cohortes.actualizadas }}</dd></div>
+    <div><dt class="text-emerald-800">Equipos creados</dt><dd class="font-semibold">{{ resumen.equipos.creados }}</dd></div>
+    <div><dt class="text-emerald-800">Equipos actualizados</dt><dd class="font-semibold">{{ resumen.equipos.actualizados }}</dd></div>
+    <div><dt class="text-emerald-800">Estudiantes creados</dt><dd class="font-semibold">{{ resumen.estudiantes.creados }}</dd></div>
+    <div><dt class="text-emerald-800">Estudiantes actualizados</dt><dd class="font-semibold">{{ resumen.estudiantes.actualizados }}</dd></div>
+  </dl>
+  {% if resumen.filas_con_error %}
+  <div class="mt-5 overflow-hidden rounded-lg border border-amber-200 bg-amber-50 text-amber-950">
+    <h3 class="px-4 py-3 text-sm font-semibold">Filas con errores</h3>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-amber-200 text-left text-sm">
+        <thead class="bg-amber-100/70">
+          <tr><th scope="col" class="px-4 py-2 font-semibold">Fila</th><th scope="col" class="px-4 py-2 font-semibold">Error</th></tr>
+        </thead>
+        <tbody class="divide-y divide-amber-200">
+      {% for item in resumen.filas_con_error %}
+          <tr><td class="whitespace-nowrap px-4 py-2">{{ item.fila }}</td><td class="px-4 py-2">{{ item.error }}</td></tr>
+      {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endif %}

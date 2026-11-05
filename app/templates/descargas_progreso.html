@@ -1,0 +1,58 @@
+{% set resultados = progreso.resultados.values()|list %}
+{% set porcentaje = (progreso.hechos * 100 // progreso.total) if progreso.total else 0 %}
+{% set clonados = resultados|selectattr('estado', 'equalto', 'clonado')|list|length %}
+{% set actualizados = resultados|selectattr('estado', 'equalto', 'actualizado')|list|length %}
+{% set sin_cambios = resultados|selectattr('estado', 'equalto', 'sin_cambios')|list|length %}
+{% set vacios = resultados|selectattr('estado', 'equalto', 'vacio')|list|length %}
+{% set errores = resultados|selectattr('estado', 'equalto', 'error')|list|length %}
+<section id="progreso-lote" class="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"
+         {% if progreso.running %}hx-get="/descargas/progreso" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}
+         aria-live="polite">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <h2 class="font-semibold text-slate-900">Progreso del lote</h2>
+      {% if mensaje %}
+        <p class="mt-1 text-sm text-slate-600">{{ mensaje }}</p>
+      {% elif progreso.running %}
+        <p class="mt-1 text-sm text-slate-600">Sincronizando por comisión. Esta sección se actualiza automáticamente.</p>
+      {% elif progreso.total %}
+        <p class="mt-1 text-sm text-slate-600">Lote finalizado.</p>
+      {% else %}
+        <p class="mt-1 text-sm text-slate-500">Todavía no se inició un lote.</p>
+      {% endif %}
+    </div>
+    {% if progreso.total %}<span class="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-700">{{ progreso.hechos }} / {{ progreso.total }}</span>{% endif %}
+  </div>
+
+  {% if progreso.total %}
+    <div class="mt-4 h-3 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-label="Progreso de sincronización" aria-valuemin="0" aria-valuemax="{{ progreso.total }}" aria-valuenow="{{ progreso.hechos }}">
+      <div class="h-full rounded-full bg-blue-600 transition-all duration-500" style="width: {{ porcentaje }}%"></div>
+    </div>
+    <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
+      <div class="rounded-lg bg-emerald-50 px-3 py-2"><div class="text-xs font-medium text-emerald-800">Clonados</div><div class="text-xl font-bold text-emerald-900">{{ clonados }}</div></div>
+      <div class="rounded-lg bg-blue-50 px-3 py-2"><div class="text-xs font-medium text-blue-800">Actualizados</div><div class="text-xl font-bold text-blue-900">{{ actualizados }}</div></div>
+      <div class="rounded-lg bg-slate-100 px-3 py-2"><div class="text-xs font-medium text-slate-700">Sin cambios</div><div class="text-xl font-bold text-slate-900">{{ sin_cambios }}</div></div>
+      <div class="rounded-lg bg-amber-50 px-3 py-2"><div class="text-xs font-medium text-amber-800">Vacíos</div><div class="text-xl font-bold text-amber-900">{{ vacios }}</div></div>
+      <div class="rounded-lg bg-red-50 px-3 py-2"><div class="text-xs font-medium text-red-800">Errores</div><div class="text-xl font-bold text-red-900">{{ errores }}</div></div>
+    </div>
+  {% endif %}
+
+  {% if progreso.finished and errores %}
+    <div class="mt-5 border-t border-slate-200 pt-4" role="alert">
+      <h3 class="text-sm font-semibold text-red-800">Errores de sincronización</h3>
+      <ul class="mt-2 space-y-2">
+        {% for resultado in resultados if resultado.estado == 'error' %}
+          <li class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">
+            <span class="font-semibold">{{ resultado.nombre }}</span>
+            <span class="text-red-700">(cohorte {{ resultado.cohorte }}, comisión {{ resultado.comision }}):</span>
+            {{ resultado.error or 'Error sin mensaje adicional.' }}
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
+  {% if progreso.error_general and progreso.finished %}
+    <p class="mt-3 text-sm text-red-700" role="alert">{{ progreso.error_general }}</p>
+  {% endif %}
+</section>

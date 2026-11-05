@@ -46,14 +46,15 @@ def _texto(valor: Any) -> str:
         return ""
     if isinstance(valor, float) and math.isfinite(valor) and valor.is_integer():
         return str(int(valor))
-    return str(valor).strip()
+    texto = str(valor).strip()
+    return re.sub(r"^([+-]?\d+)\.0+$", r"\1", texto)
 
 
 def _entero(valor: Any, nombre: str) -> int:
     texto = _texto(valor)
-    if not re.fullmatch(r"\d+(?:\.0+)?", texto):
+    if not re.fullmatch(r"\d+", texto):
         raise ValueError(f"'{nombre}' debe ser un número entero")
-    return int(float(texto))
+    return int(texto)
 
 
 def _leer_archivo(path: str | Path) -> pd.DataFrame:
@@ -61,42 +62,51 @@ def _leer_archivo(path: str | Path) -> pd.DataFrame:
     extension = archivo.suffix.lower()
     if extension == ".csv":
         try:
-            return pd.read_csv(archivo, sep=None, engine="python", encoding="utf-8-sig", dtype=str)
+            dataframe = pd.read_csv(
+                archivo,
+                sep=None,
+                engine="python",
+                encoding="utf-8-sig",
+                dtype=str,
+                keep_default_na=False,
+            )
         except UnicodeDecodeError:
-            return pd.read_csv(archivo, sep=None, engine="python", encoding="latin-1", dtype=str)
-    if extension in {".xlsx", ".xls"}:
-        return pd.read_excel(archivo, dtype=object)
-    raise ValueError("Formato no soportado: use un archivo .csv, .xlsx o .xls")
-
-
-def _clave_url(url: str) -> str:
-    return url.strip().casefold().rstrip("/").removesuffix(".git")
+            dataframe = pd.read_csv(
+                archivo,
+                sep=None,
+                engine="python",
+                encoding="latin-1",
+                dtype=str,
+                keep_default_na=False,
+            )
+    elif extension in {".xlsx", ".xls"}:
+        dataframe = pd.read_excel(archivo, dtype=str, keep_default_na=False)
+    else:
+        raise ValueError("Formato no soportado: use un archivo .csv, .xlsx o .xls")
+    return dataframe.apply(lambda columna: columna.map(_texto))
 
 
 def _obtener_equipo(
     db: Session,
     comision_id: int,
-    proyecto_nombre: str,
+    equipo_nombre: str,
+    proyecto_nombre: str | None,
     url_github: str,
 ) -> tuple[Equipo, bool, bool]:
     equipos = db.query(Equipo).filter(Equipo.comision_id == comision_id).all()
-    clave_url = _clave_url(url_github)
     equipo = next(
-        (actual for actual in equipos if _clave_url(actual.url_github) == clave_url),
-        None,
-    )
-    if equipo is None:
-        coincidencias_nombre = [
+        (
             actual
             for actual in equipos
-            if actual.nombre_proyecto.strip().casefold() == proyecto_nombre.casefold()
-        ]
-        if len(coincidencias_nombre) == 1:
-            equipo = coincidencias_nombre[0]
+            if actual.nombre.strip().casefold() == equipo_nombre.casefold()
+        ),
+        None,
+    )
 
     if equipo is None:
         equipo = Equipo(
             comision_id=comision_id,
+            nombre=equipo_nombre,
             nombre_proyecto=proyecto_nombre,
             url_github=url_github,
         )
@@ -147,6 +157,7 @@ def importar_archivo(db: Session, path: str | Path) -> dict[str, Any]:
         "filas_procesadas": 0,
         "filas_con_error": [],
     }
+    dnis_vistos: dict[str, int] = {}
 
     for numero_fila, (_, fila) in enumerate(dataframe.iterrows(), start=2):
         cambios = {
@@ -158,13 +169,22 @@ def importar_archivo(db: Session, path: str | Path) -> dict[str, Any]:
         }
 
         try:
+            dni = _texto(fila["dni"])
+            if dni:
+                if dni in dnis_vistos:
+                    raise ValueError(
+                        f"DNI duplicado en el archivo (ya aparece en la fila {dnis_vistos[dni]})"
+                    )
+                dnis_vistos[dni] = numero_fila
+
             cohorte_anio = _entero(fila["cohorte"], "cohorte")
             comision_numero = _entero(fila["comision"], "comision")
             equipo_etiqueta = _texto(fila["equipo"])
-            proyecto_nombre = _texto(fila["proyecto_nombre"])
+            proyecto_nombre = _texto(fila["proyecto_nombre"]) or None
+            if proyecto_nombre == "-":
+                proyecto_nombre = None
             url_github = _texto(fila["url_github"])
             apellido_nombre = _texto(fila["apellido_nombre"])
-            dni = _texto(fila["dni"])
             email = (
                 _texto(fila["email"]) or None
                 if "email" in dataframe.columns
@@ -178,7 +198,6 @@ def importar_archivo(db: Session, path: str | Path) -> dict[str, Any]:
 
             requeridos = {
                 "equipo": equipo_etiqueta,
-                "proyecto_nombre": proyecto_nombre,
                 "url_github": url_github,
                 "apellido_nombre": apellido_nombre,
                 "dni": dni,
@@ -214,6 +233,7 @@ def importar_archivo(db: Session, path: str | Path) -> dict[str, Any]:
                 equipo, equipo_creado, equipo_actualizado = _obtener_equipo(
                     db,
                     comision.id,
+                    equipo_etiqueta,
                     proyecto_nombre,
                     url_github,
                 )

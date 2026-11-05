@@ -1,0 +1,44 @@
+{% macro insignia_semaforo(estado, titulo='') %}
+{% set estilos = {
+  'ok': 'bg-emerald-100 text-emerald-800',
+  'advertencia': 'bg-amber-100 text-amber-800',
+  'crítico': 'bg-rose-100 text-rose-800',
+  'sin_calcular': 'bg-slate-100 text-slate-700'
+} %}
+{% set puntos = {
+  'ok': 'bg-emerald-500',
+  'advertencia': 'bg-amber-500',
+  'crítico': 'bg-rose-500',
+  'sin_calcular': 'bg-slate-400'
+} %}
+{% set etiquetas = {'ok': 'OK', 'advertencia': 'Advertencia', 'crítico': 'Crítico', 'sin_calcular': 'Sin calcular'} %}
+<span class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold {{ estilos.get(estado, estilos['sin_calcular']) }}"{% if titulo %} title="{{ titulo }}"{% endif %}>
+  <span class="h-2 w-2 rounded-full {{ puntos.get(estado, puntos['sin_calcular']) }}" aria-hidden="true"></span>{{ etiquetas.get(estado, estado|capitalize) }}
+</span>
+{% endmacro %}
+
+{% macro insignia_evaluacion(resultado) %}
+{% set estado = resultado.get('estado', 'sin_evaluar') %}
+{% set estilos = {
+  'aprobado': 'bg-emerald-100 text-emerald-800',
+  'no_aprobado': 'bg-rose-100 text-rose-800',
+  'parcial': 'bg-amber-100 text-amber-800',
+  'sin_evaluar': 'bg-slate-100 text-slate-700'
+} %}
+{% set puntos = {
+  'aprobado': 'bg-emerald-500',
+  'no_aprobado': 'bg-rose-500',
+  'parcial': 'bg-amber-500',
+  'sin_evaluar': 'bg-slate-400'
+} %}
+{% set etiquetas = {
+  'aprobado': 'Aprobado',
+  'no_aprobado': 'No aprobado',
+  'parcial': 'Parcial',
+  'sin_evaluar': 'Sin evaluar'
+} %}
+{% set motivos = resultado.get('motivos', []) %}
+<span class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold {{ estilos.get(estado, estilos['sin_evaluar']) }}" title="{{ motivos|join(' · ') if motivos else 'Sin motivos disponibles.' }}">
+  <span class="h-2 w-2 rounded-full {{ puntos.get(estado, puntos['sin_evaluar']) }}" aria-hidden="true"></span>{{ etiquetas.get(estado, 'Sin evaluar') }}
+</span>
+{% endmacro %}

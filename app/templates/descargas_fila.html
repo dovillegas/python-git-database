@@ -1,0 +1,35 @@
+<tr id="equipo-{{ equipo.id }}">
+  <td class="whitespace-nowrap px-4 py-4 font-medium text-slate-800 sm:px-6">{{ equipo.comision.cohorte.anio }}</td>
+  <td class="whitespace-nowrap px-4 py-4 text-slate-600">{{ equipo.comision.numero }}</td>
+  <td class="px-4 py-4">
+    <div class="font-semibold text-slate-900">{{ equipo.nombre }}</div>
+    {% if equipo.nombre_proyecto %}<div class="mt-0.5 text-xs text-slate-500">{{ equipo.nombre_proyecto }}</div>{% endif %}
+  </td>
+  <td class="max-w-xs px-4 py-4">
+    <a href="{{ equipo.url_github }}" target="_blank" rel="noopener noreferrer" class="block truncate text-blue-700 hover:text-blue-900 hover:underline" title="{{ equipo.url_github }}">{{ equipo.url_github }}</a>
+  </td>
+  <td class="min-w-52 px-4 py-4">
+    {% if estado.error %}
+      <span class="font-medium text-amber-700">Repositorio local ilegible</span>
+      <p class="mt-1 break-words text-xs text-amber-700">{{ estado.error }}</p>
+    {% elif estado.descargado %}
+      <span class="inline-flex items-center gap-2 font-semibold text-emerald-700">
+        <span class="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true"></span>
+        {{ estado.commit }}
+      </span>
+      {% if estado.fecha %}<p class="mt-1 text-xs text-slate-500">Último commit · {{ estado.fecha.strftime('%d/%m/%Y %H:%M') }}</p>{% endif %}
+    {% else %}
+      <span class="inline-flex items-center gap-2 font-medium text-slate-500">
+        <span class="h-2 w-2 rounded-full bg-slate-300" aria-hidden="true"></span>
+        no descargado
+      </span>
+    {% endif %}
+    {% if mensaje %}<p class="mt-1 break-words text-xs {% if 'Error' in mensaje or 'error' in mensaje %}text-red-700{% else %}text-slate-500{% endif %}" role="status">{{ mensaje }}</p>{% endif %}
+  </td>
+  <td class="whitespace-nowrap px-4 py-4 text-right sm:px-6">
+    <button type="button" hx-post="/descargas/equipo/{{ equipo.id }}" hx-target="closest tr" hx-swap="outerHTML"
+            class="rounded-lg px-3 py-2 text-sm font-semibold text-white transition focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 {% if estado.descargado %}bg-slate-700 hover:bg-slate-800{% else %}bg-blue-700 hover:bg-blue-800{% endif %}">
+      {% if estado.descargado %}Actualizar{% else %}Descargar{% endif %}
+    </button>
+  </td>
+</tr>

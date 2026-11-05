@@ -1,0 +1,13 @@
+{% if resultado.get('ok') %}
+<tr id="integrante-{{ estudiante_id }}" hx-swap-oob="delete"></tr>
+{% endif %}
+<div id="integrantes-aviso" hx-swap-oob="outerHTML" class="rounded-xl border px-4 py-3 text-sm {% if resultado.get('ok') %}border-amber-200 bg-amber-50 text-amber-950{% else %}border-rose-200 bg-rose-50 text-rose-900{% endif %}" role="status" aria-live="polite">
+  <p>{{ resultado.get('mensaje') }}</p>
+  {% if resultado.get('requiere_calculo') %}
+    <form class="mt-3" method="post" action="/equipos/{{ equipo_id }}/accion" hx-post="/equipos/{{ equipo_id }}/accion" hx-target="#equipo-acciones" hx-swap="outerHTML">
+      <input type="hidden" name="accion" value="calcular">
+      <button type="submit" {% if proceso_activo %}disabled{% endif %} class="rounded-lg bg-blue-700 px-3.5 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50">Calcular ahora</button>
+    </form>
+  {% endif %}
+</div>
+<span id="nav-autores-count" hx-swap-oob="outerHTML" class="ml-1 rounded-full bg-white/15 px-2 py-0.5 text-xs font-bold">{{ pendientes_count }}</span>

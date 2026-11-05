@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}Inicio · BD1 Seguimiento{% endblock %}
+
+{% block content %}
+<div id="dashboard-content" class="space-y-7">
+  <section class="flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <p class="text-sm font-semibold uppercase tracking-wide text-blue-700">Bases de Datos I · UNNE</p>
+      <h1 class="mt-2 text-3xl font-bold tracking-tight text-slate-950">Panel de seguimiento</h1>
+      <p class="mt-2 max-w-2xl text-slate-600">Estado de equipos, actividad y repositorios de las cohortes.</p>
+    </div>
+    <form method="get" action="/" hx-get="/" hx-trigger="change, submit" hx-target="#dashboard-content"
+          hx-select="#dashboard-content" hx-swap="outerHTML" hx-push-url="true"
+          class="grid w-full gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:w-auto sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+      <label class="text-sm font-medium text-slate-700">Cohorte
+        <select name="cohorte_id" onchange="this.form.elements.comision_id.value=''"
+                class="mt-1 block w-full min-w-40 rounded-lg border-slate-300 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
+          <option value="">Todas</option>
+          {% for item in cohortes %}<option value="{{ item.id }}" {% if cohorte_seleccionada == item.id %}selected{% endif %}>{{ item.anio }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="text-sm font-medium text-slate-700">Comisión
+        <select name="comision_id" class="mt-1 block w-full min-w-44 rounded-lg border-slate-300 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
+          <option value="">Todas</option>
+          {% for item in comisiones %}<option value="{{ item.id }}" {% if comision_seleccionada == item.id %}selected{% endif %}>{{ item.numero }} · {{ item.cohorte.anio }}</option>{% endfor %}
+        </select>
+      </label>
+      <button type="submit" class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700">Filtrar</button>
+    </form>
+  </section>
+
+  <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Métricas generales">
+    {% for titulo, valor, detalle, tono in [
+      ('Equipos', resumen.totales.equipos, 'en los filtros seleccionados', 'blue'),
+      ('Estudiantes', estudiantes_total, 'integrantes registrados', 'violet'),
+      ('Repos descargados', repos_descargados, 'repositorios disponibles localmente', 'emerald'),
+      ('Commits totales', resumen.totales.commits, 'último cálculo disponible por equipo', 'amber')
+    ] %}
+      <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <p class="text-sm font-medium text-slate-500">{{ titulo }}</p>
+        <p class="mt-2 text-3xl font-bold tracking-tight text-slate-950">{{ "{:,.0f}".format(valor).replace(",", ".") }}</p>
+        <p class="mt-1 text-xs text-slate-500">{{ detalle }}</p>
+      </article>
+    {% endfor %}
+  </section>
+
+  <section class="grid gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(18rem,0.8fr)]">
+    <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+        <div><h2 class="font-semibold text-slate-950">Alertas</h2><p class="mt-0.5 text-sm text-slate-500">Equipos e integrantes que requieren seguimiento.</p></div>
+        <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">{{ alertas_panel|sum(attribute='cantidad') }} eventos</span>
+      </div>
+      <div class="divide-y divide-slate-100">
+        {% for alerta in alertas_panel %}
+          <a href="/equipos?alerta={{ alerta.href }}{% if cohorte_seleccionada %}&amp;cohorte_id={{ cohorte_seleccionada }}{% endif %}{% if comision_seleccionada %}&amp;comision_id={{ comision_seleccionada }}{% endif %}"
+             class="flex items-center justify-between gap-4 px-5 py-3.5 transition hover:bg-slate-50">
+            <div><span class="text-sm font-semibold text-slate-800">{{ alerta.titulo }}</span>{% if alerta.detalle %}<p class="mt-0.5 text-xs text-slate-500">{{ alerta.detalle }}</p>{% endif %}</div>
+            <span class="min-w-10 rounded-full {% if alerta.cantidad %}bg-rose-100 text-rose-800{% else %}bg-slate-100 text-slate-500{% endif %} px-2.5 py-1 text-center text-sm font-bold">{{ alerta.cantidad }}</span>
+          </a>
+        {% endfor %}
+      </div>
+    </div>
+
+    <a href="/autores{% if cohorte_seleccionada or comision_seleccionada %}?{% endif %}{% if cohorte_seleccionada %}cohorte_id={{ cohorte_seleccionada }}{% endif %}{% if cohorte_seleccionada and comision_seleccionada %}&amp;{% endif %}{% if comision_seleccionada %}comision_id={{ comision_seleccionada }}{% endif %}"
+       class="group flex flex-col justify-between rounded-2xl bg-gradient-to-br from-indigo-700 to-blue-800 p-6 text-white shadow-lg shadow-blue-900/10 transition hover:-translate-y-0.5 hover:shadow-xl">
+      <div>
+        <div class="flex items-center justify-between"><span class="text-sm font-semibold text-blue-100">Revisión prioritaria</span><span class="rounded-full bg-white/15 px-2.5 py-1 text-xs font-bold">Autores</span></div>
+        <h2 class="mt-5 text-2xl font-bold">Autores sin asignar</h2>
+        <p class="mt-2 text-sm leading-6 text-blue-100">Identificá autores del historial Git y vinculalos con estudiantes.</p>
+      </div>
+      <div class="mt-8 flex items-end justify-between">
+        <div><span class="text-4xl font-extrabold">{{ resumen.totales.autores_sin_asignar }}</span><span class="ml-2 text-sm text-blue-100">autores</span><p class="mt-1 text-xs text-blue-200">{{ resumen.totales.commits_sin_asignar }} commits afectados</p></div>
+        <span class="rounded-full bg-white/15 px-4 py-2 text-sm font-semibold group-hover:bg-white/25">Ir a autores →</span>
+      </div>
+    </a>
+  </section>
+
+  <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-5 py-4">
+      <div><h2 class="font-semibold text-slate-950">Resumen por comisión</h2><p class="mt-0.5 text-sm text-slate-500">Totales calculados y alertas por grupo.</p></div>
+      <a href="/equipos" class="text-sm font-semibold text-blue-700 hover:text-blue-900">Ver todos los equipos →</a>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
+        <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th class="px-5 py-3">Cohorte</th><th class="px-5 py-3">Comisión</th><th class="px-5 py-3">Equipos</th><th class="px-5 py-3">Commits</th><th class="px-5 py-3">Equipos en alerta</th><th class="px-5 py-3">Sin asignar</th></tr></thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for grupo in comisiones_resumen %}
+            <tr class="hover:bg-slate-50"><td class="px-5 py-3.5 font-medium text-slate-700">{{ grupo.comision.cohorte.anio }}</td><td class="px-5 py-3.5">{{ grupo.comision.numero }}</td><td class="px-5 py-3.5">{{ grupo.equipos }}</td><td class="px-5 py-3.5">{{ grupo.commits }}</td><td class="px-5 py-3.5"><span class="rounded-full {% if grupo.equipos_alerta %}bg-amber-100 text-amber-800{% else %}bg-emerald-100 text-emerald-800{% endif %} px-2.5 py-1 text-xs font-semibold">{{ grupo.equipos_alerta }}</span></td><td class="px-5 py-3.5">{{ grupo.sin_asignar }}</td></tr>
+          {% else %}
+            <tr><td colspan="6" class="px-5 py-10 text-center text-slate-500">No hay equipos para los filtros seleccionados.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{% endblock %}

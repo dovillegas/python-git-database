@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Sistema de seguimiento de proyectos de BD1">
+  <title>{% block title %}BD1 Seguimiento{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-900 antialiased">
+  <header class="border-b border-slate-800 bg-slate-900 text-white shadow-sm">
+    <nav class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8" aria-label="Navegación principal">
+      <a href="/" class="text-lg font-bold tracking-tight">BD1 <span class="font-medium text-slate-300">Seguimiento</span></a>
+      <div class="flex items-center gap-2 sm:gap-4">
+        {% set menu = [
+          {"nombre": "Inicio", "href": "/", "prefijos": ["/"]},
+          {"nombre": "Equipos", "href": "/equipos", "prefijos": ["/equipos", "/estudiantes"]},
+          {"nombre": "Importar", "href": "/importar", "prefijos": ["/importar"]},
+          {"nombre": "Descargas", "href": "/descargas", "prefijos": ["/descargas"]},
+          {"nombre": "Evaluación", "href": "/evaluacion", "prefijos": ["/evaluacion"]},
+          {"nombre": "Sincronización", "href": "/sincronizacion", "prefijos": ["/sincronizacion"]},
+          {"nombre": "Autores", "href": "/autores", "prefijos": ["/autores"]}
+        ] %}
+        {% for item in menu %}
+          {% set estado = namespace(activo=(request.url.path == "/" if item.nombre == "Inicio" else false)) %}
+          {% if item.nombre != "Inicio" %}
+            {% for prefijo in item.prefijos %}
+              {% if request.url.path == prefijo or request.url.path.startswith(prefijo ~ "/") %}
+                {% set estado.activo = true %}
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+          <a href="{{ item.href }}" class="{{ 'rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-500' if estado.activo else 'rounded-md px-3 py-2 text-sm text-slate-200 transition hover:bg-slate-800 hover:text-white' }}"{% if estado.activo %} aria-current="page"{% endif %}>{{ item.nombre }}{% if item.nombre == "Autores" %}<span id="nav-autores-count" class="ml-1 rounded-full bg-white/15 px-2 py-0.5 text-xs font-bold">{{ autores_pendientes|default(0) }}</span>{% endif %}</a>
+        {% endfor %}
+      </div>
+    </nav>
+  </header>
+
+  <main class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="mx-auto max-w-7xl px-4 pb-8 text-sm text-slate-500 sm:px-6 lg:px-8">
+    Bases de Datos I · UNNE
+  </footer>
+  <style>
+    .htmx-indicator { display: none; }
+    .htmx-request.htmx-indicator { display: inline-flex; }
+  </style>
+</body>
+</html>

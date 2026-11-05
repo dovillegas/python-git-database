@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% from "_semaforo.html" import insignia_evaluacion %}
+{% block title %}Evaluación · {{ resultado.nombre }} · BD1 Seguimiento{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <nav class="text-sm text-slate-500" aria-label="Migas de pan"><a href="/evaluacion" class="text-blue-700 hover:underline">Evaluación</a><span class="mx-2">›</span><span class="font-medium text-slate-800">{{ resultado.nombre }}</span></nav>
+  <header class="flex flex-wrap items-start justify-between gap-4"><div><p class="text-sm font-semibold uppercase tracking-wide text-blue-700">Cohorte {{ resultado.cohorte }} · Comisión {{ resultado.comision }}</p><h1 class="mt-1 text-3xl font-bold tracking-tight text-slate-950">{{ resultado.nombre_proyecto or resultado.nombre }}</h1><p class="mt-1 text-sm text-slate-600">{{ resultado.nombre }}</p></div><div class="flex flex-wrap gap-2"><a href="/equipos/{{ resultado.equipo_id }}" class="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Detalle del equipo</a><a href="{{ resultado.url_github }}" target="_blank" rel="noopener noreferrer" class="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-blue-700 hover:bg-blue-50">Abrir repositorio ↗</a></div></header>
+  {% include "_evaluacion_resumen.html" %}
+  {% if rubricas %}
+    <div class="space-y-4">
+    {% for rubrica in rubricas %}<section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div class="border-b border-slate-200 bg-slate-50 px-5 py-4"><h2 class="font-semibold text-slate-950">{{ rubrica.nombre }}</h2><p class="mt-1 text-xs text-slate-500">{{ rubrica.codigo }}</p>{% if rubrica.guia %}<div class="mt-3 whitespace-pre-line rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm text-blue-950">{{ rubrica.guia }}</div>{% endif %}</div><div class="divide-y divide-slate-100">
+      {% for criterio in rubrica.criterios %}{% set valor = valoraciones.get(criterio.id, {}) %}
+      <form class="grid gap-3 p-5 md:grid-cols-[minmax(12rem,1fr)_12rem_minmax(14rem,1.5fr)] md:items-end" method="post" action="/evaluacion/equipo/{{ resultado.equipo_id }}/valorar" hx-post="/evaluacion/equipo/{{ resultado.equipo_id }}/valorar" hx-trigger="change, submit" hx-target="#resumen-evaluacion" hx-swap="outerHTML">
+        <input type="hidden" name="criterio_id" value="{{ criterio.id }}"><div><h3 class="font-semibold text-slate-900">{{ criterio.nombre }}</h3><p class="mt-1 text-xs text-slate-500">{{ criterio.codigo }} · Peso {{ criterio.peso }}{% if not criterio.activo %} · Inactivo (no computa){% endif %}</p>
+          {% if criterio.descripcion or criterio.que_revisar or criterio.evidencia_adecuado or criterio.evidencia_solido or criterio.evidencia_destacado or criterio.ejemplo_observacion %}
+          <details class="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700"><summary class="cursor-pointer font-semibold">Guía del criterio</summary>
+            {% if criterio.descripcion %}<p class="mt-2">{{ criterio.descripcion }}</p>{% endif %}
+            {% if criterio.que_revisar %}<p class="mt-3 font-semibold">Qué revisar</p><ul class="mt-1 list-disc space-y-1 pl-5">{% for item in criterio.que_revisar.split('\n') if item.strip() %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}
+            {% if criterio.evidencia_adecuado or criterio.evidencia_solido or criterio.evidencia_destacado %}<div class="mt-3 space-y-1">{% if criterio.evidencia_adecuado %}<p><strong>Adecuado (3):</strong> {{ criterio.evidencia_adecuado }}</p>{% endif %}{% if criterio.evidencia_solido %}<p><strong>Sólido (4):</strong> {{ criterio.evidencia_solido }}</p>{% endif %}{% if criterio.evidencia_destacado %}<p><strong>Destacado (5):</strong> {{ criterio.evidencia_destacado }}</p>{% endif %}</div>{% endif %}
+            {% if criterio.ejemplo_observacion %}<p class="mt-3"><strong>Ejemplo de observación:</strong> {{ criterio.ejemplo_observacion }}</p>{% endif %}
+          </details>{% endif %}
+        </div>
+        <label class="text-sm font-medium text-slate-700">Nivel<select name="nivel" class="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2" {% if not criterio.activo %}disabled{% endif %}><option value="">Sin valorar</option>{% for nivel in range(6) %}<option value="{{ nivel }}" {% if valor and valor.nivel == nivel %}selected{% endif %}>{{ nivel }} · {{ etiquetas_nivel[nivel] }}</option>{% endfor %}</select></label>
+        <label class="text-sm font-medium text-slate-700">Observación<textarea name="observacion" rows="2" class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2" placeholder="Evidencia u observación..." {% if not criterio.activo %}disabled{% endif %}>{{ valor.observacion or '' if valor else '' }}</textarea></label>
+        <button type="submit" class="justify-self-start rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 md:col-start-2">Guardar criterio</button>
+      </form>
+      {% else %}<p class="px-5 py-8 text-center text-sm text-slate-500">Esta rúbrica no tiene criterios configurados.</p>{% endfor %}
+    </div></section>{% endfor %}
+    </div>
+  {% else %}<section class="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950">Todavía no hay rúbricas ni criterios configurados. Podés configurarlos desde <a href="/evaluacion/rubricas" class="font-semibold underline">Configurar rúbricas</a>.</section>{% endif %}
+</div>
+{% endblock %}

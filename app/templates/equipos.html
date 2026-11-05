@@ -1,0 +1,76 @@
+{% if vista != "progreso" %}{% extends "base.html" %}{% endif %}
+{% from "_equipos_fila.html" import fila_equipo %}
+
+{% macro tabla_equipos(filas, oob=false, proceso_activo=false) %}
+<div id="tabla-equipos" {% if oob %}hx-swap-oob="outerHTML"{% endif %} class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+  <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4"><h2 class="font-semibold text-slate-950">Equipos</h2><span class="text-sm text-slate-500">{{ filas|length }} resultado{% if filas|length != 1 %}s{% endif %}</span></div>
+  <div class="overflow-x-auto"><table class="min-w-full divide-y divide-slate-200 text-left text-sm">
+    <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr>
+      {% for clave, etiqueta in [('nombre','Nombre'),('comision','Comisión'),('commits','Commits'),('ultimo_commit','Último commit'),('dias_sin_actividad','Días sin actividad'),('dominante','Integrante dominante')] %}
+        <th class="whitespace-nowrap px-4 py-3"><a class="hover:text-blue-800" href="{{ sort_urls[clave] }}">{{ etiqueta }}{% if orden == clave %}<span class="ml-1">{% if direccion == 'asc' %}↑{% else %}↓{% endif %}</span>{% endif %}</a></th>
+      {% endfor %}
+      <th class="whitespace-nowrap px-4 py-3">Ignorados</th><th class="px-4 py-3">Estado</th><th class="px-4 py-3">Acción</th>
+    </tr></thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for fila in filas %}{{ fila_equipo(fila, proceso_activo) }}{% else %}<tr><td colspan="9" class="px-6 py-12 text-center text-slate-500">No hay equipos que coincidan con los filtros.</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{% endmacro %}
+
+{% macro boton_recalcular(url, proceso_activo=false, oob=false) %}
+<form id="recalcular-todo-form" method="post" action="{{ url }}" hx-post="{{ url }}" hx-target="#progreso-equipos" hx-swap="outerHTML" {% if oob %}hx-swap-oob="outerHTML"{% endif %}>
+  <button type="submit" {% if proceso_activo %}disabled{% endif %} class="rounded-lg px-4 py-2.5 text-sm font-semibold text-white shadow-sm {% if proceso_activo %}cursor-not-allowed bg-slate-400{% else %}bg-blue-700 hover:bg-blue-800{% endif %}">Recalcular todo</button>
+</form>
+{% endmacro %}
+
+{% block title %}Equipos · BD1 Seguimiento{% endblock %}
+{% block content %}
+{% if vista == "progreso" %}
+  {% set porcentaje = (progreso.hechos * 100 // progreso.total) if progreso.total else 0 %}
+  {{ boton_recalcular(recalcular_url, progreso.running, true) }}
+  <section id="progreso-equipos" class="mb-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+           {% if progreso.running %}hx-get="{{ progress_url }}" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %} aria-live="polite">
+    <div class="flex flex-wrap items-start justify-between gap-3"><div>
+      <h2 class="font-semibold text-slate-950">{% if progreso.running %}Recalculo en curso{% else %}Recalculo de métricas{% endif %}</h2>
+      <p class="mt-1 text-sm text-slate-600">{{ progreso.mensaje or ('El proceso continúa en segundo plano.' if progreso.running else 'Proceso finalizado.') }}</p>
+    </div>{% if progreso.total %}<span class="rounded-full bg-blue-50 px-3 py-1 text-sm font-bold text-blue-800">{{ progreso.hechos }} / {{ progreso.total }}</span>{% endif %}</div>
+    {% if progreso.total %}<div class="mt-4 h-2.5 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-valuemin="0" aria-valuemax="{{ progreso.total }}" aria-valuenow="{{ progreso.hechos }}"><div class="h-full rounded-full bg-blue-600 transition-all" style="width: {{ porcentaje }}%"></div></div>{% endif %}
+    <p class="mt-3 text-xs text-slate-500">Calculados: {{ progreso.calculados }} · Errores: {{ progreso.errores }}</p>
+  </section>
+  {{ tabla_equipos(filas, true, progreso.running) }}
+{% else %}
+<div id="equipos-content" class="space-y-6">
+  <section class="flex flex-wrap items-end justify-between gap-4">
+    <div><p class="text-sm font-semibold uppercase tracking-wide text-blue-700">Análisis de actividad</p><h1 class="mt-2 text-3xl font-bold tracking-tight text-slate-950">Equipos</h1><p class="mt-2 text-slate-600">Commits, actividad reciente y distribución de aportes.</p></div>
+    <div class="flex flex-wrap gap-2">
+      <a href="/equipos/nuevo" class="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">Nuevo equipo</a>
+      {{ boton_recalcular(recalcular_url, progreso.running) }}
+    </div>
+  </section>
+
+  <form method="get" action="/equipos" hx-get="/equipos" hx-trigger="change, submit" hx-target="#equipos-content" hx-select="#equipos-content" hx-swap="outerHTML" hx-push-url="true"
+        class="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_auto_auto] xl:items-end">
+    <label class="text-sm font-medium text-slate-700">Cohorte
+      <select name="cohorte_id" onchange="this.form.elements.comision_id.value=''" class="mt-1 block w-full rounded-lg border-slate-300 bg-white px-3 py-2 shadow-sm"><option value="">Todas</option>{% for item in cohortes %}<option value="{{ item.id }}" {% if cohorte_seleccionada == item.id %}selected{% endif %}>{{ item.anio }}</option>{% endfor %}</select>
+    </label>
+    <label class="text-sm font-medium text-slate-700">Comisión
+      <select name="comision_id" class="mt-1 block w-full rounded-lg border-slate-300 bg-white px-3 py-2 shadow-sm"><option value="">Todas</option>{% for item in comisiones %}<option value="{{ item.id }}" {% if comision_seleccionada == item.id %}selected{% endif %}>{{ item.numero }} · {{ item.cohorte.anio }}</option>{% endfor %}</select>
+    </label>
+    <label class="text-sm font-medium text-slate-700">Alerta
+      <select name="alerta" class="mt-1 block w-full rounded-lg border-slate-300 bg-white px-3 py-2 shadow-sm">
+        <option value="">Todas</option><option value="sin_actividad" {% if alerta == 'sin_actividad' %}selected{% endif %}>Sin actividad</option><option value="desbalance" {% if alerta == 'desbalance' %}selected{% endif %}>Desbalance</option><option value="sin_asignar" {% if alerta == 'sin_asignar' %}selected{% endif %}>Autores sin asignar</option><option value="no_descargado" {% if alerta == 'no_descargado' %}selected{% endif %}>No descargado o con error</option><option value="integrantes_sin_commits" {% if alerta == 'integrantes_sin_commits' %}selected{% endif %}>Integrantes sin commits</option>
+      </select>
+    </label>
+    <input type="hidden" name="orden" value="{{ orden }}"><input type="hidden" name="dir" value="{{ direccion }}">
+    <button type="submit" class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700">Filtrar</button>
+    <a href="/equipos" class="rounded-lg border border-slate-300 px-4 py-2 text-center text-sm font-semibold text-slate-700 hover:bg-slate-50">Limpiar</a>
+  </form>
+
+  <div id="progreso-equipos" class="rounded-xl border px-4 py-3 text-sm {% if progreso.running %}border-amber-200 bg-amber-50 font-medium text-amber-900{% else %}border-dashed border-slate-300 bg-white text-slate-500{% endif %}" {% if progreso.running %}hx-get="{{ progress_url }}" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %} role="status">
+    {% if progreso.running %}Hay un proceso en curso · {{ progreso.hechos }} / {{ progreso.total }} · calculados {{ progreso.calculados }} · errores {{ progreso.errores }}. Las acciones de cálculo están deshabilitadas.{% else %}El progreso del recálculo aparecerá aquí.{% endif %}
+  </div>
+  {{ tabla_equipos(filas, false, progreso.running) }}
+</div>
+{% endif %}
+{% endblock %}

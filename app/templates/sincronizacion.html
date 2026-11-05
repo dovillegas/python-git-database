@@ -1,0 +1,192 @@
+{% if vista == "pagina" %}{% extends "base.html" %}{% endif %}
+
+{% macro fila_equipo(equipo, estado, mensaje=none, error=false) %}
+<tr id="equipo-{{ equipo.id }}">
+  <td class="whitespace-nowrap px-4 py-4 font-medium text-slate-800">{{ equipo.comision.cohorte.anio }}</td>
+  <td class="whitespace-nowrap px-4 py-4 text-slate-600">{{ equipo.comision.numero }}</td>
+  <td class="px-4 py-4">
+    <div class="font-semibold text-slate-900">{{ equipo.nombre }}</div>
+    {% if equipo.nombre_proyecto %}<div class="mt-0.5 text-xs text-slate-500">{{ equipo.nombre_proyecto }}</div>{% endif %}
+  </td>
+  <td class="px-4 py-4">
+    {% if estado.descargado %}
+      <span class="font-semibold text-emerald-700">Descargado</span>
+      {% if estado.commit %}<span class="ml-1 font-mono text-xs text-slate-500">{{ estado.commit }}</span>{% endif %}
+      {% if estado.error_local %}<p class="mt-1 max-w-xs break-words text-xs text-amber-700">{{ estado.error_local }}</p>{% endif %}
+    {% else %}
+      <span class="font-medium text-slate-500">No descargado</span>
+    {% endif %}
+  </td>
+  <td class="px-4 py-4">
+    {% if estado.metrica %}
+      <span class="font-medium text-slate-800">{{ estado.metrica.total_commits }} commits</span>
+      <p class="mt-1 text-xs text-slate-500">Calculado {{ estado.metrica.fecha.strftime('%d/%m/%Y') }}</p>
+    {% else %}
+      <span class="text-slate-500">Sin calcular</span>
+    {% endif %}
+  </td>
+  <td class="whitespace-nowrap px-4 py-4">
+    <span class="inline-flex items-center gap-1 font-bold {% if estado.control_ok %}text-emerald-700{% else %}text-red-700{% endif %}"
+          title="{{ estado.detalle_control }}" aria-label="{{ estado.detalle_control }}">
+      {% if estado.control_ok %}✔{% else %}✖{% endif %}
+      <span class="font-medium">Control</span>
+    </span>
+    <div class="mt-1 text-xs">
+      <a href="/autores?equipo_id={{ equipo.id }}" class="font-medium text-blue-700 hover:text-blue-900 hover:underline">
+        Sin asignar · {{ estado.sin_asignar }}
+      </a>
+    </div>
+  </td>
+  <td class="min-w-64 px-4 py-4">
+    <div class="flex flex-wrap gap-1.5">
+      <button type="button" hx-post="/sincronizacion/equipo/{{ equipo.id }}?accion=descargar" hx-target="closest tr" hx-swap="outerHTML"
+              class="rounded-md bg-blue-700 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-800">Descargar</button>
+      <button type="button" hx-post="/sincronizacion/equipo/{{ equipo.id }}?accion=calcular" hx-target="closest tr" hx-swap="outerHTML"
+              class="rounded-md bg-slate-700 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-slate-800">Calcular</button>
+      <button type="button" hx-post="/sincronizacion/equipo/{{ equipo.id }}?accion=sincronizar_calcular" hx-target="closest tr" hx-swap="outerHTML"
+              class="rounded-md bg-emerald-700 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-800">Sincronizar y calcular</button>
+    </div>
+    {% if mensaje %}<p class="mt-2 max-w-xs break-words text-xs {% if error %}text-red-700{% else %}text-emerald-700{% endif %}" role="status">{{ mensaje }}</p>{% endif %}
+  </td>
+</tr>
+{% endmacro %}
+
+{% macro tabla_equipos(equipos, estado_equipos, oob=false) %}
+<div id="tabla-sincronizacion" {% if oob %}hx-swap-oob="outerHTML"{% endif %} class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+  <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3 sm:px-6">
+    <h2 class="font-semibold text-slate-900">Estado de equipos</h2>
+    <span class="text-sm text-slate-500">{{ equipos|length }} resultado{% if equipos|length != 1 %}s{% endif %}</span>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
+      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+        <tr>
+          <th scope="col" class="px-4 py-3">Cohorte</th>
+          <th scope="col" class="px-4 py-3">Comisión</th>
+          <th scope="col" class="px-4 py-3">Equipo</th>
+          <th scope="col" class="px-4 py-3">Descarga</th>
+          <th scope="col" class="px-4 py-3">Métricas</th>
+          <th scope="col" class="px-4 py-3">Control</th>
+          <th scope="col" class="px-4 py-3">Acciones</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-200">
+        {% for equipo in equipos %}
+          {{ fila_equipo(equipo, estado_equipos[equipo.id]) }}
+        {% else %}
+          <tr><td colspan="7" class="px-6 py-10 text-center text-slate-500">No hay equipos que coincidan con los filtros.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endmacro %}
+
+{% block content %}
+{% if vista == "fila" %}
+  {{ fila_equipo(equipo, estado, mensaje, error) }}
+{% elif vista == "progreso" %}
+  {% set porcentaje = (progreso.hechos * 100 // progreso.total) if progreso.total else 0 %}
+  <section id="progreso-sincronizacion" class="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"
+           {% if progreso.running %}hx-get="/sincronizacion/progreso" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}
+           aria-live="polite">
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h2 class="font-semibold text-slate-900">Progreso de sincronización</h2>
+        {% if progreso.mensaje %}<p class="mt-1 text-sm text-slate-600">{{ progreso.mensaje }}</p>
+        {% elif progreso.running %}<p class="mt-1 text-sm text-slate-600">El proceso continúa en segundo plano.</p>
+        {% elif progreso.finished and progreso.total %}<p class="mt-1 text-sm text-slate-600">Proceso finalizado.</p>
+        {% else %}<p class="mt-1 text-sm text-slate-500">No hay equipos para procesar.</p>{% endif %}
+      </div>
+      {% if progreso.total %}<span class="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-700">{{ progreso.hechos }} / {{ progreso.total }}</span>{% endif %}
+    </div>
+    {% if progreso.total %}
+      <div class="mt-4 h-3 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-label="Progreso de sincronización" aria-valuemin="0" aria-valuemax="{{ progreso.total }}" aria-valuenow="{{ progreso.hechos }}">
+        <div class="h-full rounded-full bg-blue-600 transition-all duration-500" style="width: {{ porcentaje }}%"></div>
+      </div>
+      <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div class="rounded-lg bg-blue-50 px-3 py-2"><div class="text-xs font-medium text-blue-800">Descargados</div><div class="text-xl font-bold text-blue-900">{{ progreso.descargados }}</div></div>
+        <div class="rounded-lg bg-emerald-50 px-3 py-2"><div class="text-xs font-medium text-emerald-800">Calculados</div><div class="text-xl font-bold text-emerald-900">{{ progreso.calculados }}</div></div>
+        <div class="rounded-lg bg-red-50 px-3 py-2"><div class="text-xs font-medium text-red-800">Errores</div><div class="text-xl font-bold text-red-900">{{ progreso.errores }}</div></div>
+      </div>
+    {% endif %}
+    {% if progreso.finished and progreso.errores %}
+      <div class="mt-5 border-t border-slate-200 pt-4" role="alert">
+        <h3 class="text-sm font-semibold text-red-800">Errores al finalizar</h3>
+        <ul class="mt-2 space-y-2">
+          {% for resultado in progreso.resultados if resultado.error %}
+            <li class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">
+              <span class="font-semibold">{{ resultado.nombre }}</span>
+              <span class="text-red-700">(cohorte {{ resultado.cohorte }}, comisión {{ resultado.comision }}):</span>
+              {{ resultado.error }}
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+  </section>
+  {% if progreso.finished %}{{ tabla_equipos(equipos, estado_equipos, true) }}{% endif %}
+{% else %}
+<section>
+  <div class="mb-6">
+    <p class="text-sm font-semibold uppercase tracking-wide text-blue-700">Repositorios y métricas</p>
+    <h1 class="mt-2 text-3xl font-bold tracking-tight text-slate-900">Sincronización</h1>
+    <p class="mt-2 max-w-3xl text-slate-600">Descargá repositorios, calculá métricas locales o ejecutá ambas tareas para los equipos filtrados.</p>
+  </div>
+
+  <div id="contenido-filtros">
+  <div class="mb-5 flex flex-wrap gap-2">
+    {% for accion, etiqueta, clases in [
+      ('descargar', 'Descargar', 'bg-blue-700 hover:bg-blue-800'),
+      ('calcular', 'Calcular', 'bg-slate-700 hover:bg-slate-800'),
+      ('sincronizar_calcular', 'Sincronizar y calcular', 'bg-emerald-700 hover:bg-emerald-800')
+    ] %}
+      <form method="post" action="/sincronizacion/ejecutar?accion={{ accion }}{% if cohorte_seleccionada %}&amp;cohorte={{ cohorte_seleccionada }}{% endif %}{% if comision_seleccionada %}&amp;comision={{ comision_seleccionada }}{% endif %}"
+            hx-post="/sincronizacion/ejecutar?accion={{ accion }}{% if cohorte_seleccionada %}&amp;cohorte={{ cohorte_seleccionada }}{% endif %}{% if comision_seleccionada %}&amp;comision={{ comision_seleccionada }}{% endif %}"
+            hx-target="#progreso-sincronizacion" hx-swap="outerHTML">
+        <button type="submit" class="rounded-lg px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition {{ clases }}">{{ etiqueta }}</button>
+      </form>
+    {% endfor %}
+  </div>
+
+  <form id="filtros-sincronizacion" method="get" action="/sincronizacion"
+      hx-get="/sincronizacion" hx-trigger="change, submit" hx-target="#contenido-filtros" hx-select="#contenido-filtros" hx-swap="outerHTML"
+        class="mb-5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div class="grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+      <label class="block text-sm font-medium text-slate-700">Cohorte
+        <select name="cohorte" onchange="this.form.elements.comision.value=''" class="mt-1 block w-full rounded-lg border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
+          <option value="">Todas las cohortes</option>
+          {% for item in cohortes %}<option value="{{ item.id }}" {% if cohorte_seleccionada == item.id %}selected{% endif %}>{{ item.anio }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="block text-sm font-medium text-slate-700">Comisión
+        <select name="comision" class="mt-1 block w-full rounded-lg border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200">
+          <option value="">Todas las comisiones</option>
+          {% for item in comisiones %}<option value="{{ item.id }}" {% if comision_seleccionada == item.id %}selected{% endif %}>{{ item.numero }} · Cohorte {{ item.cohorte.anio }}</option>{% endfor %}
+        </select>
+      </label>
+      <div class="flex gap-2">
+        <button type="submit" class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700">Filtrar</button>
+        <a href="/sincronizacion" class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Limpiar</a>
+      </div>
+    </div>
+  </form>
+
+  <div aria-live="polite">
+    {% if progreso.running %}
+      {% set porcentaje = (progreso.hechos * 100 // progreso.total) if progreso.total else 0 %}
+      <section id="progreso-sincronizacion" class="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5" hx-get="/sincronizacion/progreso" hx-trigger="every 2s" hx-swap="outerHTML">
+        <h2 class="font-semibold text-slate-900">Proceso en curso · {{ progreso.hechos }} / {{ progreso.total }}</h2>
+        <div class="mt-4 h-3 overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full bg-blue-600" style="width: {{ porcentaje }}%"></div></div>
+        <p class="mt-3 text-sm text-slate-600">Descargados: {{ progreso.descargados }} · Calculados: {{ progreso.calculados }} · Errores: {{ progreso.errores }}</p>
+      </section>
+    {% else %}
+      <section id="progreso-sincronizacion" class="mb-6 rounded-xl border border-dashed border-slate-300 bg-white px-4 py-4 text-sm text-slate-500">El progreso aparecerá aquí al iniciar una acción.</section>
+    {% endif %}
+  </div>
+
+  {{ tabla_equipos(equipos, estado_equipos) }}
+  </div>
+</section>
+{% endif %}
+{% endblock %}

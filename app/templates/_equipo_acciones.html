@@ -1,0 +1,19 @@
+<div id="equipo-acciones" class="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4" {% if proceso_activo %}hx-get="/equipos/{{ equipo_id }}/acciones" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %} aria-live="polite">
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      {% if proceso_activo %}
+        <p class="text-sm font-semibold text-amber-900">Proceso en curso · {{ progreso.hechos }} / {{ progreso.total }} equipo(s)</p>
+        <p class="mt-1 text-xs text-slate-600">Descargados: {{ progreso.descargados }} · Calculados: {{ progreso.calculados }} · Errores: {{ progreso.errores }}</p>
+      {% elif mensaje %}<p class="text-sm text-slate-700">{{ mensaje }}</p>
+      {% else %}<p class="text-sm text-slate-600">Elegí una acción para este equipo.</p>{% endif %}
+    </div>
+    <div class="flex flex-wrap gap-2">
+      {% for accion, etiqueta, estilo in [('descargar', 'Descargar', 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-100'), ('calcular', 'Calcular', 'bg-blue-700 text-white hover:bg-blue-800'), ('sincronizar_calcular', 'Ambos', 'bg-slate-900 text-white hover:bg-slate-700')] %}
+        <form method="post" action="/equipos/{{ equipo_id }}/accion" hx-post="/equipos/{{ equipo_id }}/accion" hx-target="#equipo-acciones" hx-swap="outerHTML">
+          <input type="hidden" name="accion" value="{{ accion }}">
+          <button type="submit" {% if proceso_activo %}disabled{% endif %} class="rounded-lg px-3.5 py-2 text-sm font-semibold {{ estilo }} {% if proceso_activo %}cursor-not-allowed opacity-50{% endif %}">{{ etiqueta }}</button>
+        </form>
+      {% endfor %}
+    </div>
+  </div>
+</div>
