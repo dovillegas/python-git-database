@@ -8,4 +8,7 @@ data/
 # Configuración de desarrollo (agentes e instrucciones)
 .github/
 
-tests/
+tests/*
+!tests/test_importer.py
+
+*.tar.gz

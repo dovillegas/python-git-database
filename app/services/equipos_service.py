@@ -109,6 +109,109 @@ def _obtener_comision(db: Session, comision_id: int) -> Comision | None:
     return db.query(Comision).filter(Comision.id == comision_id).first()
 
 
+def comisiones_de_cohorte(db: Session, cohorte_id: int) -> list[Comision]:
+    """Devuelve las comisiones de la cohorte ordenadas por número."""
+    return (
+        db.query(Comision)
+        .filter(Comision.cohorte_id == cohorte_id)
+        .order_by(Comision.numero, Comision.id)
+        .all()
+    )
+
+
+def crear_comision(db: Session, cohorte_id: int, numero: int) -> dict[str, Any]:
+    """Crea una comisión o devuelve la existente en la misma cohorte."""
+    bloqueado = _error_bloqueado()
+    if bloqueado:
+        return bloqueado
+
+    try:
+        if isinstance(numero, bool) or not isinstance(numero, int) or numero <= 0:
+            raise ValueError("El número de comisión debe ser un entero positivo.")
+        if db.query(Cohorte).filter(Cohorte.id == cohorte_id).first() is None:
+            raise ValueError("La cohorte indicada no existe.")
+
+        comision = (
+            db.query(Comision)
+            .filter(Comision.cohorte_id == cohorte_id, Comision.numero == numero)
+            .first()
+        )
+        existente = comision is not None
+        if comision is None:
+            comision = Comision(cohorte_id=cohorte_id, numero=numero)
+            db.add(comision)
+        db.commit()
+        return {
+            "ok": True,
+            "mensaje": "sin cambios" if existente else "Comisión creada correctamente.",
+            "comision_id": comision.id,
+            "comision": comision,
+        }
+    except ValueError as exc:
+        db.rollback()
+        return {"ok": False, "mensaje": str(exc)}
+    except Exception as exc:
+        db.rollback()
+        return {"ok": False, "mensaje": f"No se pudo crear la comisión: {exc}"}
+
+
+def cambiar_comision(
+    db: Session, equipo_id: int, comision_id: int
+) -> dict[str, Any]:
+    """Traslada un equipo dentro de su cohorte sin modificar repositorio ni métricas."""
+    try:
+        bloqueado = _error_bloqueado()
+        if bloqueado:
+            return bloqueado
+
+        equipo = db.query(Equipo).filter(Equipo.id == equipo_id).first()
+        if equipo is None:
+            raise ValueError("El equipo indicado no existe.")
+        comision_actual = _obtener_comision(db, equipo.comision_id)
+        if comision_actual is None:
+            raise ValueError("No se pudo determinar la cohorte actual del equipo.")
+        destino = _obtener_comision(db, comision_id)
+        if destino is None:
+            raise ValueError("La comisión de destino no existe.")
+        if destino.cohorte_id != comision_actual.cohorte_id:
+            raise ValueError("La comisión de destino pertenece a otra cohorte.")
+
+        if destino.id == equipo.comision_id:
+            mensaje = "sin cambios"
+        else:
+            candidatos = (
+                db.query(Equipo, Comision)
+                .join(Comision, Equipo.comision_id == Comision.id)
+                .filter(Comision.cohorte_id == comision_actual.cohorte_id, Equipo.id != equipo.id)
+                .all()
+            )
+            nombre = equipo.nombre.strip().casefold()
+            for otro, comision in candidatos:
+                if otro.nombre.strip().casefold() == nombre:
+                    raise ValueError(
+                        f"Ya existe el equipo '{otro.nombre}' (ID {otro.id}) "
+                        f"en la comisión {comision.numero} de la misma cohorte."
+                    )
+            equipo.comision_id = destino.id
+            mensaje = "Comisión del equipo actualizada correctamente."
+
+        db.commit()
+        return {
+            "ok": True,
+            "mensaje": mensaje,
+            "equipo_id": equipo_id,
+            "comision_id": comision_id,
+            "requiere_descarga": False,
+            "requiere_calculo": False,
+        }
+    except ValueError as exc:
+        db.rollback()
+        return {"ok": False, "mensaje": str(exc)}
+    except Exception as exc:
+        db.rollback()
+        return {"ok": False, "mensaje": f"No se pudo cambiar la comisión: {exc}"}
+
+
 def _agregar_integrante_sin_commit(
     db: Session,
     equipo_id: int,

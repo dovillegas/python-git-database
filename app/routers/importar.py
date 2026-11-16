@@ -11,8 +11,9 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.database import DATA_DIR, get_db
+from app.models import Cohorte, Comision, Equipo
 from app.services.importer import importar_archivo
-from app.services import mantenimiento_service, pipeline_service
+from app.services import importer, mantenimiento_service, pipeline_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["importación"])
@@ -20,6 +21,91 @@ templates = Jinja2Templates(directory=str(Path(__file__).resolve().parents[1] / 
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 SUPPORTED_EXTENSIONS = {".csv", ".xlsx", ".xls"}
+MODOS = {"conservar_panel", "archivo_manda"}
+
+
+def _preparar_informe(db: Session, ruta: Path, resumen: dict) -> dict:
+    """Añade contexto de filas y enlaces reales al informe del importador."""
+    try:
+        datos = importer._leer_archivo(ruta)
+        datos.columns = [importer._normalizar_columna(columna) for columna in datos.columns]
+        if datos.columns.duplicated().any():
+            return resumen
+        filas = []
+        for numero, (_, fila) in enumerate(datos.iterrows(), start=2):
+            valores = {clave: importer._texto(valor) for clave, valor in fila.items()}
+            cohorte = valores.get("cohorte", "")
+            if re.fullmatch(r"\d+", cohorte):
+                valores["cohorte"] = str(int(cohorte))
+            filas.append({"fila": numero, **valores})
+    except Exception:
+        return resumen
+
+    # Los mensajes de errores del motor de base de datos pueden incluir parámetros.
+    dnis = {fila.get("dni", "") for fila in filas} - {""}
+    for error in resumen.get("filas_con_error", []):
+        mensaje = str(error.get("error", ""))
+        for dni in sorted(dnis, key=len, reverse=True):
+            mensaje = mensaje.replace(dni, importer._dni_parcial(dni))
+        error["error"] = mensaje
+
+    equipos = (db.query(Equipo, Cohorte.anio)
+               .join(Comision, Equipo.comision_id == Comision.id)
+               .join(Cohorte, Comision.cohorte_id == Cohorte.id).all())
+    por_clave = {}
+    for equipo, anio in equipos:
+        por_clave.setdefault((str(anio), equipo.nombre.strip().casefold()), equipo.id)
+
+    urls_por_clave = {
+        (str(anio), equipo.nombre.strip().casefold()): importer._normalizar_url(equipo.url_github)
+        for equipo, anio in equipos
+    }
+    urls_antes_de_fila = {}
+    filas_con_error = {error.get("fila") for error in resumen.get("filas_con_error", [])}
+    for fila in filas:
+        clave = (fila.get("cohorte", ""), fila.get("equipo", "").strip().casefold())
+        url_archivo = importer._normalizar_url(fila.get("url_github", ""))
+        urls_antes_de_fila[fila["fila"]] = urls_por_clave.get(clave, "")
+        if fila["fila"] not in filas_con_error:
+            if not urls_por_clave.get(clave):
+                urls_por_clave[clave] = url_archivo
+
+    def equipo_id(nombre: str | None, fila: dict | None) -> int | None:
+        if not nombre or not fila:
+            return None
+        return por_clave.get((fila.get("cohorte", ""), nombre.strip().casefold()))
+
+    por_numero = {fila["fila"]: fila for fila in filas}
+    usadas_url: set[int] = set()
+    for conflicto in resumen.get("conflictos", []):
+        fila = por_numero.get(conflicto.get("fila"))
+        if conflicto.get("tipo") == "url_distinta":
+            fila = next((f for f in filas if f["fila"] not in usadas_url
+                         and f["fila"] not in filas_con_error
+                         and f.get("equipo", "").strip().casefold() == conflicto.get("equipo", "").strip().casefold()
+                         and importer._normalizar_url(f.get("url_github", "")) == conflicto.get("archivo")
+                         and urls_antes_de_fila[f["fila"]] == importer._normalizar_url(conflicto.get("actual"))), None)
+            if fila:
+                conflicto["fila"] = fila["fila"]
+                usadas_url.add(fila["fila"])
+        if conflicto.get("tipo") == "estudiante_en_otro_equipo":
+            conflicto["equipo_archivo_id"] = equipo_id(conflicto.get("equipo_archivo"), fila)
+            estudiante = importer._buscar_estudiante(db, fila.get("dni", ""), fila.get("email") or None) if fila else None
+            conflicto["equipo_actual_id"] = estudiante.equipo_id if estudiante else None
+        else:
+            conflicto["equipo_id"] = equipo_id(conflicto.get("equipo"), fila)
+
+    usadas_nuevos: set[int] = set()
+    for nuevo in resumen.get("estudiantes_nuevos", []):
+        fila = next((f for f in filas if f["fila"] not in usadas_nuevos
+                     and f["fila"] not in filas_con_error
+                     and f.get("equipo", "").strip().casefold() == nuevo.get("equipo", "").strip().casefold()
+                     and f.get("apellido_nombre", "") == nuevo.get("nombre")), None)
+        if fila:
+            nuevo["fila"] = fila["fila"]
+            nuevo["equipo_id"] = equipo_id(nuevo.get("equipo"), fila)
+            usadas_nuevos.add(fila["fila"])
+    return resumen
 
 
 def _render_import_page(request: Request, **context: object):
@@ -92,8 +178,12 @@ def pagina_importar(request: Request):
 async def importar(
     request: Request,
     archivo: UploadFile = File(...),
+    modo: str = Form(default="conservar_panel"),
     db: Session = Depends(get_db),
 ):
+    if modo not in MODOS:
+        await archivo.close()
+        return _render_result(request, error="El modo de importación no es válido.")
     filename = archivo.filename or ""
     suffix = Path(filename).suffix.lower()
     if suffix not in SUPPORTED_EXTENSIONS:
@@ -116,9 +206,12 @@ async def importar(
     try:
         uploads_dir = DATA_DIR / "uploads"
         uploads_dir.mkdir(parents=True, exist_ok=True)
-        ruta = uploads_dir / f"{uuid4().hex}{suffix}"
+        ruta = uploads_dir / f"{uuid4().hex}_{modo}{suffix}"
         ruta.write_bytes(contenido)
-        resumen = importar_archivo(db, ruta)
+        resumen = importar_archivo(db, ruta, modo=modo, solo_previsualizar=True)
+        resumen = _preparar_informe(db, ruta, resumen)
+        if not resumen.get("filas_procesadas"):
+            ruta.unlink(missing_ok=True)
     except ValueError as exc:
         db.rollback()
         return _render_result(request, error=str(exc))
@@ -130,7 +223,36 @@ async def importar(
             error="Ocurrió un error al procesar el archivo. Revisá su formato e intentá nuevamente.",
         )
 
-    return _render_result(request, resumen=resumen)
+    return _render_result(request, resumen=resumen, previsualizacion=True, archivo_guardado=ruta.name, modo=modo)
+
+
+@router.post("/importar/confirmar", name="confirmar_importacion")
+def confirmar_importacion(
+    request: Request,
+    archivo_guardado: str = Form(default=""),
+    db: Session = Depends(get_db),
+):
+    coincidencia = re.fullmatch(r"[0-9a-f]{32}_(conservar_panel|archivo_manda)\.(csv|xlsx|xls)", archivo_guardado)
+    if not coincidencia:
+        return _render_result(request, error="La previsualización no es válida. Volvé a cargar el archivo.")
+    uploads = DATA_DIR / "uploads"
+    ruta = uploads / archivo_guardado
+    try:
+        if not ruta.is_file() or ruta.resolve().parent != uploads.resolve():
+            return _render_result(request, error="No se encontró el archivo previsualizado. Volvé a cargarlo.")
+        modo = coincidencia.group(1)
+        resumen = importar_archivo(db, ruta, modo=modo, solo_previsualizar=False)
+        resumen = _preparar_informe(db, ruta, resumen)
+        if not any(item.get("fila") is None for item in resumen.get("filas_con_error", [])):
+            try:
+                ruta.unlink(missing_ok=True)
+            except OSError:
+                logger.warning("No se pudo borrar el archivo de importación", exc_info=True)
+    except Exception:
+        db.rollback()
+        logger.exception("Error inesperado al confirmar la importación")
+        return _render_result(request, error="No se pudo confirmar la importación. Intentá nuevamente.")
+    return _render_result(request, resumen=resumen, modo=modo)
 
 
 def _ejecutar_mantenimiento(

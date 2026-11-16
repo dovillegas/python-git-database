@@ -7,6 +7,7 @@
 {% set dominante_pct = fila.dominante_pct %}
 {% set titulo_motivos = fila.motivos|map(attribute='texto')|join(' · ') if fila.motivos else 'Sin alertas' %}
 <tr id="equipo-{{ equipo.id }}" class="hover:bg-slate-50">
+  <td class="px-3 py-3.5"><input type="checkbox" name="equipo_ids" value="{{ equipo.id }}" form="mover-equipos-form" aria-label="Seleccionar {{ equipo.nombre }}" class="rounded border-slate-300 text-blue-700 focus:ring-blue-600" {% if proceso_activo %}disabled{% endif %}></td>
   <td class="px-4 py-3.5">
     <a href="/equipos/{{ equipo.id }}" class="font-semibold text-blue-800 hover:text-blue-950 hover:underline">{{ equipo.nombre }}</a>
     {% if equipo.nombre_proyecto %}<p class="mt-0.5 text-xs text-slate-500">{{ equipo.nombre_proyecto }}</p>{% endif %}

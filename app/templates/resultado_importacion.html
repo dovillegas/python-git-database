@@ -1,36 +1,77 @@
+{% macro enlace_equipo(nombre, id) -%}
+  {% if id %}<a class="font-semibold text-blue-700 underline hover:text-blue-900" href="/equipos/{{ id }}">{{ nombre }}</a>{% else %}{{ nombre or 'No disponible' }} <span class="text-slate-500">(aún no disponible en el panel)</span>{% endif %}
+{%- endmacro %}
+
 {% if error %}
 <div role="alert" class="rounded-xl border border-red-200 bg-red-50 p-5 text-red-900">
-  <h2 class="font-semibold">No se pudo importar el archivo</h2>
+  <h2 class="font-semibold">No se pudo procesar el archivo</h2>
   <p class="mt-1 text-sm">{{ error }}</p>
 </div>
 {% elif resumen %}
-<div class="rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950">
-  <h2 class="font-semibold">Importación finalizada</h2>
-  <p class="mt-1 text-sm">Filas procesadas: {{ resumen.filas_procesadas }} · Errores: {{ resumen.filas_con_error|length }}</p>
+<div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm text-slate-900">
+  <h2 class="text-lg font-semibold">{% if previsualizacion %}Previsualización de la importación{% else %}Resultado de la importación{% endif %}</h2>
+  {% if previsualizacion %}<p class="mt-1 text-sm text-slate-600">Todavía no se guardó ningún cambio. Revisá el informe antes de confirmar.</p>{% endif %}
+  <p class="mt-1 text-sm text-slate-600">Modo: {% if modo == 'archivo_manda' %}Priorizar los datos del archivo{% else %}Conservar lo editado en el panel{% endif %} · Filas procesadas: {{ resumen.filas_procesadas }} · Errores: {{ resumen.filas_con_error|length }}</p>
   <dl class="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
-    <div><dt class="text-emerald-800">Cohortes creadas</dt><dd class="font-semibold">{{ resumen.cohortes.creadas }}</dd></div>
-    <div><dt class="text-emerald-800">Cohortes actualizadas</dt><dd class="font-semibold">{{ resumen.cohortes.actualizadas }}</dd></div>
-    <div><dt class="text-emerald-800">Equipos creados</dt><dd class="font-semibold">{{ resumen.equipos.creados }}</dd></div>
-    <div><dt class="text-emerald-800">Equipos actualizados</dt><dd class="font-semibold">{{ resumen.equipos.actualizados }}</dd></div>
-    <div><dt class="text-emerald-800">Estudiantes creados</dt><dd class="font-semibold">{{ resumen.estudiantes.creados }}</dd></div>
-    <div><dt class="text-emerald-800">Estudiantes actualizados</dt><dd class="font-semibold">{{ resumen.estudiantes.actualizados }}</dd></div>
+    <div><dt class="text-slate-600">Cohortes creadas</dt><dd class="font-semibold">{{ resumen.cohortes.creadas }}</dd></div>
+    <div><dt class="text-slate-600">Cohortes actualizadas</dt><dd class="font-semibold">{{ resumen.cohortes.actualizadas }}</dd></div>
+    <div><dt class="text-slate-600">Equipos creados</dt><dd class="font-semibold">{{ resumen.equipos.creados }}</dd></div>
+    <div><dt class="text-slate-600">Equipos actualizados</dt><dd class="font-semibold">{{ resumen.equipos.actualizados }}</dd></div>
+    <div><dt class="text-slate-600">Estudiantes creados</dt><dd class="font-semibold">{{ resumen.estudiantes.creados }}</dd></div>
+    <div><dt class="text-slate-600">Estudiantes actualizados</dt><dd class="font-semibold">{{ resumen.estudiantes.actualizados }}</dd></div>
   </dl>
   {% if resumen.filas_con_error %}
-  <div class="mt-5 overflow-hidden rounded-lg border border-amber-200 bg-amber-50 text-amber-950">
-    <h3 class="px-4 py-3 text-sm font-semibold">Filas con errores</h3>
-    <div class="overflow-x-auto">
-      <table class="min-w-full divide-y divide-amber-200 text-left text-sm">
-        <thead class="bg-amber-100/70">
-          <tr><th scope="col" class="px-4 py-2 font-semibold">Fila</th><th scope="col" class="px-4 py-2 font-semibold">Error</th></tr>
-        </thead>
-        <tbody class="divide-y divide-amber-200">
-      {% for item in resumen.filas_con_error %}
-          <tr><td class="whitespace-nowrap px-4 py-2">{{ item.fila }}</td><td class="px-4 py-2">{{ item.error }}</td></tr>
-      {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
+  <details class="mt-5 rounded-lg border border-amber-200 bg-amber-50 text-amber-950" open>
+    <summary class="cursor-pointer px-4 py-3 text-sm font-semibold">Filas con errores ({{ resumen.filas_con_error|length }})</summary>
+    <div class="overflow-x-auto"><table class="min-w-full text-left text-sm">
+      <thead><tr><th class="px-4 py-2">Fila</th><th class="px-4 py-2">Error</th></tr></thead>
+      <tbody>{% for item in resumen.filas_con_error %}<tr class="border-t border-amber-200"><td class="px-4 py-2">{{ item.fila if item.fila is not none else 'General' }}</td><td class="px-4 py-2">{{ item.error }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </details>
+  {% endif %}
+  <h3 class="mt-6 font-semibold">Conflictos</h3>
+  {% if not resumen.conflictos %}
+    <p class="mt-2 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">Sin conflictos.</p>
+  {% else %}
+    {% for tipo, titulo in [('comision_distinta', 'Comisión distinta'), ('url_distinta', 'URL distinta'), ('estudiante_en_otro_equipo', 'Estudiante en otro equipo')] %}
+      {% set conflictos = resumen.conflictos|selectattr('tipo', 'equalto', tipo)|list %}
+      {% if conflictos %}
+      <details class="mt-3 rounded-lg border border-amber-200 bg-amber-50">
+        <summary class="cursor-pointer px-4 py-3 text-sm font-semibold text-amber-950">{{ titulo }} ({{ conflictos|length }})</summary>
+        <div class="overflow-x-auto"><table class="min-w-full text-left text-sm">
+          <thead><tr><th class="px-4 py-2">Fila</th>{% if tipo == 'estudiante_en_otro_equipo' %}<th class="px-4 py-2">DNI parcial</th><th class="px-4 py-2">Equipo actual</th><th class="px-4 py-2">Equipo del archivo</th>{% else %}<th class="px-4 py-2">Equipo</th><th class="px-4 py-2">Actual</th><th class="px-4 py-2">Archivo</th>{% endif %}</tr></thead>
+          <tbody>{% for item in conflictos %}
+            <tr class="border-t border-amber-200"><td class="px-4 py-2">{{ item.fila|default('No disponible', true) }}</td>
+              {% if tipo == 'estudiante_en_otro_equipo' %}
+              <td class="px-4 py-2">{{ item.dni_parcial }}</td><td class="px-4 py-2">{{ enlace_equipo(item.equipo_actual, item.equipo_actual_id|default(none)) }}</td><td class="px-4 py-2">{{ enlace_equipo(item.equipo_archivo, item.equipo_archivo_id|default(none)) }}</td>
+              {% elif tipo == 'comision_distinta' %}
+              <td class="px-4 py-2">{{ enlace_equipo(item.equipo, item.equipo_id|default(none)) }}</td><td class="px-4 py-2">{{ item.comision_actual }}</td><td class="px-4 py-2">{{ item.comision_archivo }}</td>
+              {% else %}
+              <td class="px-4 py-2">{{ enlace_equipo(item.equipo, item.equipo_id|default(none)) }}</td><td class="break-all px-4 py-2">{{ item.actual }}</td><td class="break-all px-4 py-2">{{ item.archivo }}</td>
+              {% endif %}
+            </tr>
+          {% endfor %}</tbody>
+        </table></div>
+      </details>
+      {% endif %}
+    {% endfor %}
+  {% endif %}
+  <details class="mt-5 rounded-lg border border-slate-200">
+    <summary class="cursor-pointer px-4 py-3 text-sm font-semibold">Estudiantes nuevos ({{ resumen.estudiantes_nuevos|length }})</summary>
+    {% if resumen.estudiantes_nuevos %}
+    <div class="overflow-x-auto"><table class="min-w-full text-left text-sm">
+      <thead><tr><th class="px-4 py-2">Fila</th><th class="px-4 py-2">Estudiante</th><th class="px-4 py-2">Equipo</th></tr></thead>
+      <tbody>{% for item in resumen.estudiantes_nuevos %}<tr class="border-t border-slate-200"><td class="px-4 py-2">{{ item.fila|default('No disponible', true) }}</td><td class="px-4 py-2">{{ item.nombre }}</td><td class="px-4 py-2">{{ enlace_equipo(item.equipo, item.equipo_id|default(none)) }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    {% else %}<p class="px-4 pb-4 text-sm text-slate-600">No hay estudiantes nuevos.</p>{% endif %}
+  </details>
+  {% if previsualizacion and archivo_guardado and resumen.filas_procesadas > 0 %}
+  <form action="/importar/confirmar" method="post" hx-post="/importar/confirmar" hx-target="#resultado" hx-swap="innerHTML" hx-indicator="#confirmando" class="mt-6">
+    <input type="hidden" name="archivo_guardado" value="{{ archivo_guardado }}">
+    <p class="mb-3 text-sm text-slate-600">Se procesarán las filas válidas con el mismo archivo y modo. Los conflictos pueden resolverse desde el panel.</p>
+    <button type="submit" class="rounded-lg bg-blue-700 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-800">Confirmar importación</button>
+    <span id="confirmando" class="htmx-indicator ml-3 text-sm text-blue-700" role="status">Confirmando…</span>
+  </form>
   {% endif %}
 </div>
 {% endif %}

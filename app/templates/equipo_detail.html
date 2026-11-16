@@ -6,27 +6,12 @@
 
 {% block content %}
 <div class="space-y-7">
-  <nav class="text-sm text-slate-500" aria-label="Migas de pan">
-    <a href="/" class="text-blue-700 hover:underline">Inicio</a><span class="mx-2">›</span>
-    <a href="/equipos?comision_id={{ equipo.comision_id }}" class="text-blue-700 hover:underline">Comisión {{ equipo.comision.numero }}</a><span class="mx-2">›</span>
-    <span class="font-medium text-slate-800">Equipo</span>
-  </nav>
-
-  <section class="flex flex-wrap items-start justify-between gap-4">
-    <div>
-      <p class="text-sm font-semibold uppercase tracking-wide text-blue-700">Cohorte {{ equipo.comision.cohorte.anio }} · Comisión {{ equipo.comision.numero }} · {{ equipo.nombre }}</p>
-      <h1 class="mt-2 text-3xl font-bold tracking-tight text-slate-950">{{ equipo.nombre_proyecto or equipo.nombre }}</h1>
-      {% if equipo.nombre_proyecto %}<p class="mt-1 text-sm text-slate-500">{{ equipo.nombre }}</p>{% endif %}
-      <p class="mt-2 text-sm font-medium text-slate-700">{{ total_commits_desglose }} en el repo = {{ commits_integrantes }} de integrantes + {{ commits_ignorados }} de autores ignorados + {{ commits_sin_asignar }} sin asignar</p>
-      {% if not metrica %}<p class="mt-1 text-xs text-slate-500">Sin métrica de proyecto: total derivado de autores Git registrados.</p>{% endif %}
-      <p class="mt-2"><a href="{{ equipo.url_github }}" target="_blank" rel="noopener noreferrer" class="break-all text-blue-700 hover:underline">{{ equipo.url_github }}</a></p>
-    </div>
-    <div class="flex flex-wrap gap-2">
-      {% if proceso_activo %}<button type="button" disabled class="cursor-not-allowed rounded-lg bg-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600">Editar equipo</button>
-      {% else %}<a href="/equipos/{{ equipo.id }}/editar" class="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">Editar equipo</a>{% endif %}
-      <a href="/autores?estado=pendientes&amp;equipo_id={{ equipo.id }}" class="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">Ver todos los autores →</a>
-    </div>
-  </section>
+  {% include "_equipo_encabezado.html" %}
+  <div class="-mt-5">
+    <p class="text-sm font-medium text-slate-700">{{ total_commits_desglose }} en el repo = {{ commits_integrantes }} de integrantes + {{ commits_ignorados }} de autores ignorados + {{ commits_sin_asignar }} sin asignar</p>
+    {% if not metrica %}<p class="mt-1 text-xs text-slate-500">Sin métrica de proyecto: total derivado de autores Git registrados.</p>{% endif %}
+    <p class="mt-2"><a href="{{ equipo.url_github }}" target="_blank" rel="noopener noreferrer" class="break-all text-blue-700 hover:underline">{{ equipo.url_github }}</a></p>
+  </div>
 
   <section id="integrantes-aviso" class="rounded-xl border px-4 py-3 text-sm {% if aviso_tipo == 'warning' %}border-amber-200 bg-amber-50 text-amber-950{% else %}border-emerald-200 bg-emerald-50 text-emerald-950{% endif %}" role="status" aria-live="polite" {% if not aviso %}hidden{% endif %}>
     <p>{{ aviso or '' }}</p>
@@ -183,4 +168,18 @@
   });
 </script>
 {% endif %}
+<script>
+  window.actualizarFormularioComision = function (select) {
+    const form = select.form;
+    if (!form) return;
+    const opcion = select.options[select.selectedIndex];
+    const esNueva = select.value === 'nueva';
+    const numero = form.elements.numero_nueva;
+    const contenedor = form.querySelector('[id^="numero-nueva-wrap-"]');
+    if (contenedor) contenedor.hidden = !esNueva;
+    if (numero) numero.required = esNueva;
+    const destino = esNueva ? (numero.value.trim() || 'nueva') : (opcion?.dataset.numero || 'seleccionada');
+    form.setAttribute('hx-confirm', `El equipo ${form.dataset.equipo} pasará de la comisión ${form.dataset.comisionActual} a la ${destino}. No se vuelve a descargar ni a calcular.`);
+  };
+</script>
 {% endblock %}

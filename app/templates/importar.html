@@ -18,8 +18,14 @@
     <input id="archivo" name="archivo" type="file" accept=".csv,.xlsx,.xls" required
            class="block w-full cursor-pointer rounded-lg border border-slate-300 bg-slate-50 text-sm text-slate-700 file:mr-4 file:border-0 file:bg-slate-100 file:px-4 file:py-3 file:font-semibold file:text-slate-800 hover:file:bg-slate-200">
     <p class="mt-2 text-sm text-slate-500">Formatos admitidos: CSV, XLSX y XLS. Tamaño máximo: 10 MB.</p>
+    <label for="modo" class="mb-2 mt-5 block text-sm font-semibold text-slate-800">Modo de importación</label>
+    <select id="modo" name="modo" class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800">
+      <option value="conservar_panel" {% if modo|default('conservar_panel') == 'conservar_panel' %}selected{% endif %}>Conservar lo editado en el panel</option>
+      <option value="archivo_manda" {% if modo|default('conservar_panel') == 'archivo_manda' %}selected{% endif %}>Priorizar los datos del archivo</option>
+    </select>
+    <p class="mt-2 text-sm text-slate-500">El archivo puede actualizar la URL y trasladar estudiantes en el segundo modo; la comisión del equipo se conserva en ambos.</p>
     <button type="submit" class="mt-6 inline-flex items-center rounded-lg bg-blue-700 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-      Importar archivo
+      Previsualizar
     </button>
     <span id="cargando" class="htmx-indicator ml-3 items-center gap-2 text-sm font-medium text-blue-700" role="status" aria-live="polite">
       <svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">

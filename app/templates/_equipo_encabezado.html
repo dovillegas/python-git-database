@@ -1,0 +1,39 @@
+<div id="equipo-encabezado">
+  {% if error_comision %}<div class="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900" role="alert">{{ error_comision }}</div>
+  {% elif aviso_comision %}<div class="mb-4 rounded-xl border px-4 py-3 text-sm {% if aviso_comision_tipo == 'warning' %}border-amber-200 bg-amber-50 text-amber-950{% else %}border-emerald-200 bg-emerald-50 text-emerald-950{% endif %}" role="status" aria-live="polite">{{ aviso_comision }}</div>{% endif %}
+
+  <nav class="text-sm text-slate-500" aria-label="Migas de pan">
+    <a href="/" class="text-blue-700 hover:underline">Inicio</a><span class="mx-2">›</span>
+    <a href="/equipos?comision_id={{ equipo.comision_id }}" class="text-blue-700 hover:underline">Comisión {{ equipo.comision.numero }}</a><span class="mx-2">›</span>
+    <span class="font-medium text-slate-800">Equipo</span>
+  </nav>
+
+  <section class="mt-7 flex flex-wrap items-start justify-between gap-4">
+    <div>
+      <p class="text-sm font-semibold uppercase tracking-wide text-blue-700">Cohorte {{ equipo.comision.cohorte.anio }} · Comisión {{ equipo.comision.numero }} · {{ equipo.nombre }}</p>
+      <h1 class="mt-2 text-3xl font-bold tracking-tight text-slate-950">{{ equipo.nombre_proyecto or equipo.nombre }}</h1>
+      {% if equipo.nombre_proyecto %}<p class="mt-1 text-sm text-slate-500">{{ equipo.nombre }}</p>{% endif %}
+      {% set destino_confirmacion = namespace(numero=equipo.comision.numero) %}
+      {% for item in comisiones_equipo %}{% if comision_form_seleccionada == item.id|string %}{% set destino_confirmacion.numero = item.numero %}{% endif %}{% endfor %}
+      {% if comision_form_seleccionada == 'nueva' %}{% set destino_confirmacion.numero = numero_nueva or 'nueva' %}{% endif %}
+      <form method="post" action="/equipos/{{ equipo.id }}/comision" hx-post="/equipos/{{ equipo.id }}/comision" hx-target="#equipo-encabezado" hx-swap="outerHTML" hx-confirm="El equipo {{ equipo.nombre }} pasará de la comisión {{ equipo.comision.numero }} a la {{ destino_confirmacion.numero }}. No se vuelve a descargar ni a calcular." data-equipo="{{ equipo.nombre }}" data-comision-actual="{{ equipo.comision.numero }}" class="mt-3 flex flex-wrap items-end gap-2">
+        <label for="comision-destino-{{ equipo.id }}" class="text-sm font-medium text-slate-700">Cambiar comisión
+          <select id="comision-destino-{{ equipo.id }}" name="comision_id" required onchange="actualizarFormularioComision(this)" class="mt-1 block min-w-48 rounded-lg border border-slate-300 bg-white px-3 py-2 shadow-sm" {% if proceso_activo %}disabled{% endif %}>
+            {% for comision in comisiones_equipo %}<option value="{{ comision.id }}" data-numero="{{ comision.numero }}" {% if comision_form_seleccionada == comision.id|string %}selected{% endif %}>Comisión {{ comision.numero }}</option>{% endfor %}
+            <option value="nueva" data-numero="nueva" {% if comision_form_seleccionada == 'nueva' %}selected{% endif %}>Nueva comisión...</option>
+          </select>
+        </label>
+        <label id="numero-nueva-wrap-{{ equipo.id }}" class="text-sm font-medium text-slate-700" {% if comision_form_seleccionada != 'nueva' %}hidden{% endif %}>Número de la nueva comisión
+          <input type="number" name="numero_nueva" min="1" step="1" value="{{ numero_nueva }}" oninput="actualizarFormularioComision(this.form.elements.comision_id)" class="mt-1 block w-36 rounded-lg border border-slate-300 px-3 py-2 shadow-sm" {% if proceso_activo %}disabled{% endif %} {% if comision_form_seleccionada == 'nueva' %}required{% endif %}>
+        </label>
+        <button type="submit" class="rounded-lg bg-blue-700 px-3.5 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-slate-400" {% if proceso_activo %}disabled{% endif %}>Guardar</button>
+      </form>
+      {% if proceso_activo %}<p class="mt-2 text-xs font-medium text-amber-800">Hay un lote activo. El cambio de comisión está deshabilitado hasta que termine.</p>{% endif %}
+    </div>
+    <div class="flex flex-wrap gap-2">
+      {% if proceso_activo %}<button type="button" disabled class="cursor-not-allowed rounded-lg bg-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600">Editar equipo</button>
+      {% else %}<a href="/equipos/{{ equipo.id }}/editar" class="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">Editar equipo</a>{% endif %}
+      <a href="/autores?estado=pendientes&amp;equipo_id={{ equipo.id }}" class="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">Ver todos los autores →</a>
+    </div>
+  </section>
+</div>

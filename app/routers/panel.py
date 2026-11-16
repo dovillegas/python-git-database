@@ -26,6 +26,9 @@ from app.services.evaluacion_service import evaluar_equipo
 from app.services.pipeline_service import ejecutar, estado, estado_equipos
 from app.services.equipos_service import (
     agregar_integrante as servicio_agregar_integrante,
+    cambiar_comision as servicio_cambiar_comision,
+    comisiones_de_cohorte as servicio_comisiones_de_cohorte,
+    crear_comision as servicio_crear_comision,
     crear_equipo as servicio_crear_equipo,
     editar_equipo as servicio_editar_equipo,
     mover_integrante as servicio_mover_integrante,
@@ -494,6 +497,11 @@ def _equipos_context(
     return {
         "request": request,
         **filtros,
+        "comisiones_destino": (
+            servicio_comisiones_de_cohorte(db, cohorte_id)
+            if cohorte_id is not None
+            else []
+        ),
         "filas": filas,
         "alerta": alerta,
         "orden": orden,
@@ -543,18 +551,226 @@ def nuevo_equipo(request: Request, db: Session = Depends(get_db)):
 def opciones_comision(
     request: Request,
     cohorte_id: int | None = None,
+    incluir_nueva: bool = False,
     db: Session = Depends(get_db),
 ):
     if cohorte_id is not None and cohorte_id < 1:
         raise HTTPException(status_code=422, detail="La cohorte debe ser positiva")
-    query = db.query(Comision).options(joinedload(Comision.cohorte))
-    if cohorte_id is not None:
-        query = query.filter(Comision.cohorte_id == cohorte_id)
-    comisiones = query.join(Cohorte).order_by(Cohorte.anio.desc(), Comision.numero).all()
+    comisiones = (
+        servicio_comisiones_de_cohorte(db, cohorte_id)
+        if cohorte_id is not None
+        else db.query(Comision)
+        .options(joinedload(Comision.cohorte))
+        .join(Cohorte)
+        .order_by(Cohorte.anio.desc(), Comision.numero)
+        .all()
+    )
     return templates.TemplateResponse(
         request=request,
         name="_comisiones_opciones.html",
-        context={"comisiones": comisiones, "comision_seleccionada": None},
+        context={
+            "comisiones": comisiones,
+            "comision_seleccionada": None,
+            "incluir_nueva": incluir_nueva,
+        },
+    )
+
+
+def _parse_comision_destino(
+    db: Session,
+    cohorte_id: int,
+    comision_id: str,
+    numero_nueva: str,
+) -> tuple[int | None, str | None]:
+    if comision_id == "nueva":
+        try:
+            numero = int(numero_nueva)
+        except (TypeError, ValueError):
+            return None, "Ingresá un número de comisión válido."
+        resultado = servicio_crear_comision(db, cohorte_id, numero)
+        if not resultado.get("ok"):
+            return None, resultado.get("mensaje", "No se pudo crear la comisión.")
+        return resultado.get("comision_id"), None
+    destino, error = _form_id(comision_id, "una comisión de destino")
+    return destino, error
+
+
+def _contexto_encabezado_equipo(
+    db: Session,
+    request: Request,
+    equipo: Equipo,
+    *,
+    aviso: str | None = None,
+    aviso_tipo: str = "success",
+    comision_form_seleccionada: str | None = None,
+    numero_nueva: str = "",
+) -> dict[str, Any]:
+    progreso = estado()
+    comisiones = servicio_comisiones_de_cohorte(db, equipo.comision.cohorte_id)
+    seleccionada = (
+        comision_form_seleccionada
+        if comision_form_seleccionada is not None
+        else str(equipo.comision_id)
+    )
+    if seleccionada != "nueva" and not any(
+        str(comision.id) == seleccionada for comision in comisiones
+    ):
+        seleccionada = str(equipo.comision_id)
+    return {
+        "request": request,
+        "equipo": equipo,
+        "comisiones_equipo": comisiones,
+        "proceso_activo": bool(progreso.get("running")),
+        "aviso_comision": aviso,
+        "aviso_comision_tipo": aviso_tipo,
+        "comision_form_seleccionada": seleccionada,
+        "numero_nueva": numero_nueva,
+    }
+
+
+@router.post("/equipos/{equipo_id}/comision", name="cambiar_comision_equipo")
+def cambiar_comision_equipo_route(
+    equipo_id: int,
+    request: Request,
+    comision_id: str = Form(""),
+    numero_nueva: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    equipo = (
+        db.query(Equipo)
+        .options(joinedload(Equipo.comision).joinedload(Comision.cohorte))
+        .filter(Equipo.id == equipo_id)
+        .first()
+    )
+    if equipo is None:
+        return templates.TemplateResponse(
+            request=request,
+            name="_equipo_encabezado.html",
+            context={"request": request, "error_comision": "Equipo no encontrado."},
+        )
+
+    progreso = estado()
+    if progreso.get("running"):
+        resultado = {
+            "ok": False,
+            "mensaje": "Hay un lote activo. No se puede cambiar la comisión hasta que termine.",
+        }
+    else:
+        destino, error = _parse_comision_destino(
+            db, equipo.comision.cohorte_id, comision_id, numero_nueva
+        )
+        if error:
+            resultado = {"ok": False, "mensaje": error}
+        elif destino is None:
+            resultado = {"ok": False, "mensaje": "Seleccioná una comisión de destino."}
+        else:
+            resultado = servicio_cambiar_comision(db, equipo_id, destino)
+
+    db.expire_all()
+    equipo = (
+        db.query(Equipo)
+        .options(joinedload(Equipo.comision).joinedload(Comision.cohorte))
+        .filter(Equipo.id == equipo_id)
+        .first()
+    )
+    if equipo is None:
+        return templates.TemplateResponse(
+            request=request,
+            name="_equipo_encabezado.html",
+            context={"request": request, "error_comision": "Equipo no encontrado."},
+        )
+    contexto = _contexto_encabezado_equipo(
+        db,
+        request,
+        equipo,
+        aviso=resultado.get("mensaje"),
+        aviso_tipo="success" if resultado.get("ok") else "warning",
+        comision_form_seleccionada=(
+            str(resultado.get("comision_id"))
+            if resultado.get("ok") and resultado.get("comision_id") is not None
+            else comision_id
+        ),
+        numero_nueva=numero_nueva,
+    )
+    return templates.TemplateResponse(
+        request=request,
+        name="_equipo_encabezado.html",
+        context=contexto,
+    )
+
+
+@router.post("/equipos/mover", name="mover_equipos_comision")
+def mover_equipos_comision_route(
+    request: Request,
+    equipo_ids: list[str] = Form([]),
+    cohorte_id: str = Form(""),
+    comision_id: str = Form(""),
+    numero_nueva: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    if estado().get("running"):
+        return templates.TemplateResponse(
+            request=request,
+            name="_equipos_mover_resumen.html",
+            context={
+                "ok": False,
+                "mensaje": "Hay un lote activo. No se pueden mover equipos hasta que termine.",
+                "movidos": [],
+                "errores": [],
+            },
+        )
+
+    ids: list[int] = []
+    for valor in equipo_ids:
+        try:
+            equipo_id = int(valor)
+        except (TypeError, ValueError):
+            continue
+        if equipo_id > 0 and equipo_id not in ids:
+            ids.append(equipo_id)
+    mensaje = ""
+    destino = None
+    cohorte = None
+    if not ids:
+        mensaje = "Marcá al menos un equipo para mover."
+    else:
+        cohorte, error_cohorte = _form_id(cohorte_id, "una cohorte de destino")
+        if cohorte is None:
+            mensaje = error_cohorte or "Seleccioná una cohorte de destino."
+        else:
+            destino, error_destino = _parse_comision_destino(
+                db, cohorte, comision_id, numero_nueva
+            )
+            mensaje = error_destino or (
+                "Seleccioná una comisión de destino." if destino is None else ""
+            )
+
+    movidos: list[str] = []
+    errores: list[dict[str, str]] = []
+    if not mensaje and destino is not None:
+        for equipo_id in ids:
+            equipo = db.get(Equipo, equipo_id)
+            nombre = equipo.nombre if equipo is not None else f"Equipo {equipo_id}"
+            resultado = servicio_cambiar_comision(db, equipo_id, destino)
+            if resultado.get("ok"):
+                movidos.append(nombre)
+            else:
+                errores.append(
+                    {
+                        "equipo": nombre,
+                        "mensaje": resultado.get("mensaje", "No se pudo mover."),
+                    }
+                )
+
+    return templates.TemplateResponse(
+        request=request,
+        name="_equipos_mover_resumen.html",
+        context={
+            "ok": not mensaje and not errores,
+            "mensaje": mensaje,
+            "movidos": movidos,
+            "errores": errores,
+        },
     )
 
 
@@ -950,6 +1166,11 @@ def detalle_equipo(equipo_id: int, request: Request, db: Session = Depends(get_d
         context={
             "request": request,
             "equipo": equipo,
+            "comisiones_equipo": servicio_comisiones_de_cohorte(
+                db, equipo.comision.cohorte_id
+            ),
+            "comision_form_seleccionada": str(equipo.comision_id),
+            "numero_nueva": "",
             "metrica": metrica,
             "historial": historial,
             "metricas_estudiantes": metricas_estudiantes,

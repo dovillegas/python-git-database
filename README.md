@@ -11,16 +11,21 @@ indicadores de actividad y registrar evaluaciones mediante rúbricas.
 ## Funcionalidades
 
 <!-- BEGIN:modulos -->
-- **Importación:** cargar planillas CSV, XLSX y XLS con cohortes, comisiones,
-  equipos y estudiantes.
+- **Importación:** previsualizar y confirmar planillas CSV, XLSX y XLS con
+   cohortes, comisiones, equipos y estudiantes, eligiendo cómo resolver diferencias.
 - **Descargas:** clonar o actualizar repositorios de un equipo o de varios equipos,
   con filtros por cohorte y comisión y seguimiento del progreso.
 - **Sincronización y métricas:** descargar repositorios, calcular indicadores desde
   el historial Git local y consultar el estado del proceso.
 - **Panel de indicadores:** consultar resúmenes, equipos con alertas y detalles de
   actividad por equipo e integrante.
-- **Equipos y estudiantes:** crear y editar equipos, administrar integrantes y
-  consultar sus fichas.
+- **Equipos y estudiantes:** crear y editar equipos, administrar integrantes,
+   consultar sus fichas y cambiar la comisión. Desde la ficha se puede mover un
+   equipo individualmente con HTMX y crear, si hace falta, una comisión nueva
+   dentro de su misma cohorte. Desde `/equipos` se pueden mover varios equipos y
+   consultar un resumen de los movimientos y los fallos. Los movimientos se
+   bloquean mientras hay un lote activo y no requieren descargar repositorios ni
+   recalcular métricas.
 - **Autores Git:** asignar autores detectados a estudiantes, desasignarlos o
   ignorarlos; recalcular las métricas afectadas.
 - **Evaluación:** configurar rúbricas, criterios, pesos y umbrales; valorar equipos
@@ -140,7 +145,7 @@ incluirlo en el código.
 
 ## Primer uso
 
-1. **Importar** una planilla desde el menú *Importar*. Columnas reconocidas:
+1. **Previsualizar y confirmar** una planilla desde el menú *Importar*. Columnas reconocidas:
    `cohorte, comision, equipo, proyecto_nombre, url_github, apellido_nombre, dni,
    email, usuario_github`.
 2. **Sincronizar** los repositorios desde *Sincronización* o *Descargas*. Se puede
@@ -152,6 +157,45 @@ incluirlo en el código.
 5. **Consultar Equipos** y registrar las valoraciones desde *Evaluación*.
 
 Después de descargar cambios nuevos, volver a calcular los indicadores.
+
+### Importar archivos CSV o Excel
+
+El importador admite CSV, XLSX y XLS de hasta 10 MB. Requiere las columnas `cohorte`,
+`comision`, `equipo`, `proyecto_nombre`, `url_github`, `apellido_nombre` y
+`dni`; `email` y `usuario_github` son opcionales. Normaliza los encabezados
+ignorando mayúsculas, espacios y acentos. También normaliza las URL de GitHub
+quitando la barra final y el sufijo `.git`.
+
+La importación es idempotente: reconoce equipos por nombre dentro de la cohorte
+(sin distinguir mayúsculas ni espacios externos) y estudiantes por DNI o, si no
+se encuentra, por correo electrónico. Volver a importar los mismos datos no
+duplica cohortes, equipos ni estudiantes; los cambios aplicables se actualizan.
+
+En *Importar*, seleccionar el archivo y uno de los dos modos:
+
+- **`conservar_panel` (predeterminado):** conserva la URL registrada si difiere
+   de la planilla y no traslada a un estudiante que ya pertenece a otro equipo.
+   Informa esos casos como conflictos. Si el equipo está registrado en otra
+   comisión de la misma cohorte, informa la diferencia y conserva su comisión.
+- **`archivo_manda`:** permite que la planilla actualice la URL del equipo y
+   traslade al equipo indicado a un estudiante existente. Una diferencia de
+   comisión se informa, pero no cambia la comisión del equipo.
+
+1. Pulsar **Previsualizar** para revisar el resumen de filas procesadas, errores,
+   cambios, conflictos y estudiantes nuevos. La previsualización revierte los
+   cambios en la base de datos; no persiste los datos importados.
+2. Revisar los conflictos: diferencias de comisión, URL o equipo de un estudiante,
+   según el modo seleccionado. El informe muestra el DNI parcialmente enmascarado
+   en los conflictos de estudiantes. Si un equipo figura en más de una comisión
+   dentro del archivo, se rechazan sus filas por ambigüedad.
+3. Si hay filas procesadas, pulsar **Confirmar importación** para volver a procesar
+   las filas válidas con el mismo archivo y modo. Los errores de una fila no
+   impiden procesar las demás; el resultado incluye nuevamente los informes.
+
+El archivo se guarda temporalmente en `DATA_DIR/uploads` (por defecto,
+`data/uploads/`) para utilizarlo en la confirmación. Se elimina después de una
+confirmación sin errores generales; puede permanecer si no se confirma o si ocurre
+un error general.
 
 ## Estructura de directorios
 
@@ -188,13 +232,19 @@ se necesitan. Mantener los datos de ejecución fuera del código fuente.
 <!-- BEGIN:rutas -->
 | Módulo | Rutas principales | Funcionalidad |
 |---|---|---|
-| Panel y equipos | `/`, `/equipos`, `/equipos/nuevo`, `/equipos/{equipo_id}`, `/estudiantes/{estudiante_id}` | Dashboard, filtros, alta y edición de equipos, administración y consulta de integrantes, métricas y acciones de recálculo. |
+| Panel y equipos | `/`, `/equipos`, `/equipos/nuevo`, `/equipos/{equipo_id}`, `/estudiantes/{estudiante_id}`, `POST /equipos/{equipo_id}/comision`, `POST /equipos/mover` | Dashboard, filtros, alta y edición de equipos, administración y consulta de integrantes, métricas y acciones de recálculo; cambiar la comisión de un equipo desde su ficha o mover equipos seleccionados desde el listado. |
 | Autores Git | `/autores`, `/autores/{autor_id}/asignar`, `/autores/{autor_id}/ignorar`, `/autores/{autor_id}/desasignar`, `/estudiantes/{estudiante_id}/editar` | Revisar identidades Git, asociarlas a estudiantes y editar o quitar integrantes. |
 | Descargas | `/descargas`, `/descargas/equipo/{equipo_id}`, `/descargas/lote`, `/descargas/progreso` | Clonar o actualizar un repositorio o un lote y consultar el progreso. |
 | Sincronización | `/sincronizacion`, `/sincronizacion/ejecutar`, `/sincronizacion/equipo/{equipo_id}`, `/sincronizacion/progreso` | Descargar, calcular métricas o realizar ambas acciones; consultar el estado. |
-| Importación y mantenimiento | `/importar`, `/mantenimiento/metricas`, `/mantenimiento/datos`, `/mantenimiento/repos`, `/mantenimiento/todo`, `/mantenimiento/respaldo` | Importar planillas, administrar datos y repositorios, y descargar respaldos. |
+| Importación y mantenimiento | `/importar`, `POST /importar/confirmar`, `/mantenimiento/metricas`, `/mantenimiento/datos`, `/mantenimiento/repos`, `/mantenimiento/todo`, `/mantenimiento/respaldo` | Previsualizar y confirmar planillas, administrar datos y repositorios, y descargar respaldos. |
 | Evaluación | `/evaluacion`, `/evaluacion/rubricas`, `/evaluacion/equipo/{equipo_id}`, `/evaluacion/importar`, `/evaluacion/plantilla.csv`, `/evaluacion/exportar.csv` | Consultar resultados, administrar rúbricas, valorar equipos e importar o exportar CSV. |
 <!-- END:rutas -->
+
+### Operaciones del servicio de equipos
+
+- `comisiones_de_cohorte(db, cohorte_id)`: consultar las comisiones de una cohorte, ordenadas por número.
+- `crear_comision(db, cohorte_id, numero)`: crear una comisión con número entero positivo o devolver la existente en la cohorte.
+- `cambiar_comision(db, equipo_id, comision_id)`: trasladar un equipo a otra comisión de la misma cohorte. Rechaza nombres de equipo duplicados en la cohorte y sincronizaciones activas; no modifica repositorios ni métricas y no requiere descarga ni recálculo.
 
 ## Dependencias
 
